@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: villa_manager
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.0
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: dart analyze lib test
+      - run: flutter test
+      - run: dart run build_runner build
+      - run: dart run drift_dev schema generate --data-classes --companions drift_schemas/ test/generated_migrations/
+      - run: git diff --exit-code -- lib/data/database/app_database.g.dart test/generated_migrations/
+      - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - run: ./gradlew lintDebug --no-daemon
+        working-directory: villa_manager/android
+      - run: flutter build apk --debug --no-pub
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: villa_manager
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.47.0
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Restore release keystore
+        working-directory: ${{ github.workspace }}
+        run: |
+          umask 077
+          printf '%s' "$VILLAPRO_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/villapro-release.jks"
+        env:
+          VILLAPRO_KEYSTORE_BASE64: ${{ secrets.VILLAPRO_KEYSTORE_BASE64 }}
+      - run: flutter build apk --release --no-pub
+        env:
+          VILLAPRO_KEYSTORE_PATH: ${{ runner.temp }}/villapro-release.jks
+          VILLAPRO_KEYSTORE_PASSWORD: ${{ secrets.VILLAPRO_KEYSTORE_PASSWORD }}
+          VILLAPRO_KEY_ALIAS: ${{ secrets.VILLAPRO_KEY_ALIAS }}
+          VILLAPRO_KEY_PASSWORD: ${{ secrets.VILLAPRO_KEY_PASSWORD }}
+      - name: Verify release metadata
+        working-directory: villa_manager
+        env:
+          EXPECTED_CERT_SHA256: 0f3d0c80725142bb35eff072573e976f10fbd614001b6c765189884331e3ec2d
+        run: |
+          version="$(awk '/^version:/{print $2}' pubspec.yaml)"
+          version_name="${version%%+*}"
+          test "$version_name" = "${GITHUB_REF_NAME#v}"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          apksigner verify --verbose --print-certs "$apk"
+          cert="$(apksigner verify --print-certs "$apk" | awk -F': ' '/certificate SHA-256 digest:/{print tolower($2); exit}')"
+          test "$cert" = "$EXPECTED_CERT_SHA256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: VillaPro-${{ github.ref_name }}
+          path: villa_manager/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/villapro-release.jks"

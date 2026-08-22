@@ -1,7 +1,9 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:villa_manager/data/database/app_database.dart';
+import 'package:villa_manager/data/repositories/booking_repository.dart';
 import 'package:villa_manager/data/repositories/invoice_repository.dart';
+import 'package:villa_manager/data/repositories/villa_repository.dart';
 
 void main() {
   late AppDatabase db;
@@ -16,18 +18,18 @@ void main() {
 
   test('invoice with down payment (DP) and full settlement', () async {
     final now = DateTime.now();
-    final booking = Booking(
-      id: 'b-1',
-      villaId: 'v-1',
+    final villaId = await VillaRepository(
+      db,
+    ).upsert(name: 'Villa Sunset', commissionPercent: 10);
+    final bookingId = await BookingRepository(db).upsert(
+      villaId: villaId,
       guestName: 'Budi Santoso',
       guestContact: '628123456789',
       checkIn: now,
       checkOut: now.add(const Duration(days: 3)),
       pricePerNightSnapshot: 1000000,
-      status: 'confirmed',
-      notes: '',
-      createdAt: now,
     );
+    final booking = (await BookingRepository(db).getById(bookingId))!;
 
     final invId = await repo.createFromBooking(
       booking: booking,

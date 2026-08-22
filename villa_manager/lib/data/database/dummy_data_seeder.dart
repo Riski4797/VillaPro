@@ -12,8 +12,10 @@ import '../repositories/settings_repository.dart';
 import '../repositories/villa_repository.dart';
 
 class DummyDataSeeder {
-  static Future<void> seedIfEmpty(AppDatabase db,
-      [Directory? customPhotoDir]) async {
+  static Future<void> seedIfEmpty(
+    AppDatabase db, [
+    Directory? customPhotoDir,
+  ]) async {
     final existing = await db.select(db.villas).get();
     if (existing.isNotEmpty) return; // already has data
 
@@ -36,18 +38,42 @@ class DummyDataSeeder {
 
     // 2. Generate aesthetic dummy photo files
     final photoDir = customPhotoDir ?? await _getPhotoDirectory();
-    final bambooPhoto1 =
-        await _createSampleImage(photoDir, 'bamboo_main.png', 0xFF0E3D30, 'VILLA ASMARA UBUD');
-    final bambooPhoto2 =
-        await _createSampleImage(photoDir, 'bamboo_pool.png', 0xFF1B5E4A, 'INFINITY POOL');
-    final palmsPhoto1 =
-        await _createSampleImage(photoDir, 'palms_main.png', 0xFF0A2E24, 'THE PALMS CANGGU');
-    final palmsPhoto2 =
-        await _createSampleImage(photoDir, 'palms_deck.png', 0xFFC5A059, 'SUNSET ROOFTOP');
-    final casaPhoto1 =
-        await _createSampleImage(photoDir, 'casa_main.png', 0xFF1F4E5B, 'CASA BLANCA ULUWATU');
-    final oasisPhoto1 =
-        await _createSampleImage(photoDir, 'oasis_main.png', 0xFF2D5A47, 'SEMINYAK OASIS');
+    final bambooPhoto1 = await _createSampleImage(
+      photoDir,
+      'bamboo_main.png',
+      0xFF0E3D30,
+      'VILLA ASMARA UBUD',
+    );
+    final bambooPhoto2 = await _createSampleImage(
+      photoDir,
+      'bamboo_pool.png',
+      0xFF1B5E4A,
+      'INFINITY POOL',
+    );
+    final palmsPhoto1 = await _createSampleImage(
+      photoDir,
+      'palms_main.png',
+      0xFF0A2E24,
+      'THE PALMS CANGGU',
+    );
+    final palmsPhoto2 = await _createSampleImage(
+      photoDir,
+      'palms_deck.png',
+      0xFFC5A059,
+      'SUNSET ROOFTOP',
+    );
+    final casaPhoto1 = await _createSampleImage(
+      photoDir,
+      'casa_main.png',
+      0xFF1F4E5B,
+      'CASA BLANCA ULUWATU',
+    );
+    final oasisPhoto1 = await _createSampleImage(
+      photoDir,
+      'oasis_main.png',
+      0xFF2D5A47,
+      'SEMINYAK OASIS',
+    );
 
     // 3. Seed Villa 1: Villa Asmara (Ubud)
     final v1Id = await villaRepo.upsert(
@@ -91,12 +117,14 @@ class DummyDataSeeder {
     await villaRepo.upsertFaq(
       villaId: v1Id,
       question: 'Apakah harga sudah termasuk sarapan?',
-      answer: 'Ya, sudah termasuk sarapan ala carte / floating breakfast untuk 6 orang.',
+      answer:
+          'Ya, sudah termasuk sarapan ala carte / floating breakfast untuk 6 orang.',
     );
     await villaRepo.upsertFaq(
       villaId: v1Id,
       question: 'Berapa jarak ke pusat Ubud (Ubud Center)?',
-      answer: 'Hanya 10-12 menit berkendara ke Monkey Forest dan Puri Saren Ubud.',
+      answer:
+          'Hanya 10-12 menit berkendara ke Monkey Forest dan Puri Saren Ubud.',
     );
 
     // 4. Seed Villa 2: The Palms (Canggu)
@@ -326,8 +354,14 @@ class DummyDataSeeder {
   }
 
   static Future<void> _insertPhoto(
-      AppDatabase db, String villaId, String path, int sortOrder) async {
-    await db.into(db.villaPhotos).insert(
+    AppDatabase db,
+    String villaId,
+    String path,
+    int sortOrder,
+  ) async {
+    await db
+        .into(db.villaPhotos)
+        .insert(
           VillaPhotosCompanion(
             id: Value('${villaId}_photo_$sortOrder'),
             villaId: Value(villaId),
@@ -340,7 +374,11 @@ class DummyDataSeeder {
 
   /// Creates a valid PNG sample image with custom solid background color
   static Future<File> _createSampleImage(
-      Directory dir, String filename, int hexColor, String label) async {
+    Directory dir,
+    String filename,
+    int hexColor,
+    String label,
+  ) async {
     final file = File(p.join(dir.path, filename));
     if (await file.exists()) return file;
 

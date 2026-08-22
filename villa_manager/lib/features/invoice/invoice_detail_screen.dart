@@ -9,15 +9,48 @@ import '../../core/utils/formatters.dart';
 import '../../data/repositories/invoice_repository.dart';
 import '../../services/pdf_service.dart';
 import '../../services/share_service.dart';
+import '../dashboard/dashboard_providers.dart';
 import '../settings/settings_providers.dart';
 import 'invoice_providers.dart';
 
-class InvoiceDetailScreen extends ConsumerWidget {
+class InvoiceDetailScreen extends ConsumerStatefulWidget {
   const InvoiceDetailScreen({super.key, required this.invoiceId});
   final String invoiceId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InvoiceDetailScreen> createState() =>
+      _InvoiceDetailScreenState();
+}
+
+class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
+  bool _busy = false;
+  String get invoiceId => widget.invoiceId;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Operasi gagal: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _refresh() {
+    ref.invalidate(invoiceDetailProvider(invoiceId));
+    ref.invalidate(invoiceListProvider);
+    ref.invalidate(overdueUnpaidCountProvider);
+    ref.invalidate(dashboardProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(invoiceDetailProvider(invoiceId));
     final settings = ref.watch(appSettingsProvider).valueOrNull;
 
@@ -37,7 +70,11 @@ class InvoiceDetailScreen extends ConsumerWidget {
 
         final (statusBg, statusFg, statusLabel) = switch (status) {
           'paid' => (AppColors.availableBg, AppColors.availableGreen, 'LUNAS'),
-          'partial' => (AppColors.goldBg, const Color(0xFF8D6E63), 'DP DITERIMA'),
+          'partial' => (
+            AppColors.goldBg,
+            const Color(0xFF8D6E63),
+            'DP DITERIMA',
+          ),
           _ => (AppColors.occupiedBg, AppColors.occupiedRed, 'BELUM LUNAS'),
         };
 
@@ -48,38 +85,70 @@ class InvoiceDetailScreen extends ConsumerWidget {
               IconButton(
                 tooltip: 'Export PDF Guest Folio',
                 icon: const Icon(Icons.picture_as_pdf_outlined),
-                onPressed: () => PdfService().exportInvoice(detail, settings),
+                onPressed: _busy
+                    ? null
+                    : () => _run(() async {
+                        if (settings == null ||
+                            settings.bankAccounts.trim().isEmpty) {
+                          throw StateError(
+                            'Lengkapi rekening pembayaran di Pengaturan',
+                          );
+                        }
+                        await PdfService().exportInvoice(detail, settings);
+                      }),
               ),
               IconButton(
-                tooltip: 'Kirim WhatsApp',
+                tooltip: 'Bagikan invoice',
                 icon: const Icon(Icons.send_outlined),
-                onPressed: () => ShareService().shareInvoice(detail, settings),
+                onPressed: _busy
+                    ? null
+                    : () => _run(() async {
+                        if (settings == null ||
+                            settings.bankAccounts.trim().isEmpty) {
+                          throw StateError(
+                            'Lengkapi rekening pembayaran di Pengaturan',
+                          );
+                        }
+                        await ShareService().shareInvoice(detail, settings);
+                      }),
               ),
               IconButton(
                 tooltip: 'Hapus Invoice',
                 icon: const Icon(Icons.delete_outline),
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Hapus invoice?'),
-                      content: Text('Invoice ${inv.invoiceNumber} akan dihapus permanen.'),
-                      actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Batal')),
-                        FilledButton(
-                            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Hapus')),
-                      ],
-                    ),
-                  );
-                  if (ok == true && context.mounted) {
-                    await ref.read(invoiceRepoProvider).delete(invoiceId);
-                    if (context.mounted) context.go('/invoices');
-                  }
-                },
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Hapus invoice?'),
+                            content: Text(
+                              'Invoice ${inv.invoiceNumber} akan dihapus permanen.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Batal'),
+                              ),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Hapus'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true && context.mounted) {
+                          await _run(() async {
+                            await ref
+                                .read(invoiceRepoProvider)
+                                .delete(invoiceId);
+                            if (mounted) context.go('/invoices');
+                          });
+                        }
+                      },
               ),
             ],
           ),
@@ -105,20 +174,21 @@ class InvoiceDetailScreen extends ConsumerWidget {
                           Expanded(
                             child: Text(
                               inv.guestName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
+                              style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: statusBg,
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                  color: statusFg.withValues(alpha: 0.3)),
+                                color: statusFg.withValues(alpha: 0.3),
+                              ),
                             ),
                             child: Text(
                               statusLabel,
@@ -132,14 +202,21 @@ class InvoiceDetailScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('Villa: ${inv.villaName}',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
                       Text(
-                          'Jadwal: ${formatDate(inv.checkIn)} s.d. ${formatDate(inv.checkOut)}'),
-                      Text('Terbit: ${formatDate(inv.dateIssued)}',
-                          style: const TextStyle(
-                              fontSize: 12, color: AppColors.textSecondary)),
-                      
+                        'Villa: ${inv.villaName}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        'Jadwal: ${formatDate(inv.checkIn)} s.d. ${formatDate(inv.checkOut)}',
+                      ),
+                      Text(
+                        'Terbit: ${formatDate(inv.dateIssued)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+
                       const Divider(height: 24),
 
                       // Quick Payment Status Controls
@@ -150,32 +227,44 @@ class InvoiceDetailScreen extends ConsumerWidget {
                               child: FilledButton.icon(
                                 style: FilledButton.styleFrom(
                                   backgroundColor: AppColors.availableGreen,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
                                 ),
-                                onPressed: () async {
-                                  // Mark fully paid by adding payment equal to remaining balance
-                                  final amountToPay = detail.remainingBalance > 0
-                                      ? detail.remainingBalance
-                                      : detail.total;
-                                  await ref.read(invoiceRepoProvider).addPayment(
-                                        invoiceId: invoiceId,
-                                        amount: amountToPay,
-                                        paymentMethod: 'Transfer Bank',
-                                        notes: 'Pelunasan Cepat',
-                                      );
-                                  ref.invalidate(invoiceDetailProvider(invoiceId));
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Invoice berhasil ditandai LUNAS!'),
-                                        backgroundColor: AppColors.availableGreen,
-                                      ),
-                                    );
-                                  }
-                                },
-                                icon: const Icon(Icons.check_circle_outline, size: 16),
-                                label: const Text('Tandai Langsung Lunas',
-                                    style: TextStyle(fontSize: 12)),
+                                onPressed: _busy || detail.remainingBalance <= 0
+                                    ? null
+                                    : () => _run(() async {
+                                        await ref
+                                            .read(invoiceRepoProvider)
+                                            .addPayment(
+                                              invoiceId: invoiceId,
+                                              amount: detail.remainingBalance,
+                                              paymentMethod: 'Transfer Bank',
+                                              notes: 'Pelunasan Cepat',
+                                            );
+                                        _refresh();
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Invoice berhasil ditandai LUNAS!',
+                                              ),
+                                              backgroundColor:
+                                                  AppColors.availableGreen,
+                                            ),
+                                          );
+                                        }
+                                      }),
+                                icon: const Icon(
+                                  Icons.check_circle_outline,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Tandai Langsung Lunas',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ),
                             ),
                           ] else ...[
@@ -183,28 +272,58 @@ class InvoiceDetailScreen extends ConsumerWidget {
                               child: OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.occupiedRed,
-                                  side: const BorderSide(color: AppColors.occupiedRed),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  side: const BorderSide(
+                                    color: AppColors.occupiedRed,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
                                 ),
-                                onPressed: () async {
-                                  // Reset all payments
-                                  for (final p in detail.payments) {
-                                    await ref
-                                        .read(invoiceRepoProvider)
-                                        .deletePayment(invoiceId, p.id);
-                                  }
-                                  ref.invalidate(invoiceDetailProvider(invoiceId));
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Status diubah kembali ke BELUM LUNAS'),
-                                      ),
-                                    );
-                                  }
-                                },
+                                onPressed: _busy
+                                    ? null
+                                    : () async {
+                                        final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (dialogContext) => AlertDialog(
+                                            title: const Text(
+                                              'Hapus seluruh pembayaran?',
+                                            ),
+                                            content: const Text(
+                                              'Riwayat pembayaran invoice ini akan dihapus permanen.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  dialogContext,
+                                                  false,
+                                                ),
+                                                child: const Text('Batal'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () => Navigator.pop(
+                                                  dialogContext,
+                                                  true,
+                                                ),
+                                                child: const Text('Hapus'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true || !mounted) {
+                                          return;
+                                        }
+                                        await _run(() async {
+                                          await ref
+                                              .read(invoiceRepoProvider)
+                                              .clearPayments(invoiceId);
+                                          _refresh();
+                                        });
+                                      },
                                 icon: const Icon(Icons.replay, size: 16),
-                                label: const Text('Reset ke Belum Lunas',
-                                    style: TextStyle(fontSize: 12)),
+                                label: const Text(
+                                  'Reset ke Belum Lunas',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ),
                             ),
                           ],
@@ -221,63 +340,103 @@ class InvoiceDetailScreen extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Rincian Tagihan',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Rincian Tagihan',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   TextButton.icon(
-                    onPressed: () => _addItem(context, ref),
+                    onPressed: _busy ? null : () => _addItem(context, ref),
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Tambah Item'),
                   ),
                 ],
               ),
-              ...detail.items.map((item) => Card(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: AppColors.border),
+              ...detail.items.map(
+                (item) => Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: const BorderSide(color: AppColors.border),
+                  ),
+                  child: ListTile(
+                    title: Text(item.description),
+                    subtitle: Text(
+                      '${item.qty} × ${formatCurrency(item.price)}',
                     ),
-                    child: ListTile(
-                      title: Text(item.description),
-                      subtitle: Text(
-                          '${item.qty} × ${formatCurrency(item.price)}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            formatCurrency(item.qty * item.price),
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () async {
-                              await ref
-                                  .read(invoiceRepoProvider)
-                                  .deleteItem(invoiceId, item.id);
-                              ref.invalidate(invoiceDetailProvider(invoiceId));
-                            },
-                          ),
-                        ],
-                      ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formatCurrency(item.qty * item.price),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: _busy
+                              ? null
+                              : () async {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (dialogContext) => AlertDialog(
+                                      title: const Text('Hapus item invoice?'),
+                                      content: Text(item.description),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                            dialogContext,
+                                            false,
+                                          ),
+                                          child: const Text('Batal'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(
+                                            dialogContext,
+                                            true,
+                                          ),
+                                          child: const Text('Hapus'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok != true || !mounted) return;
+                                  await _run(() async {
+                                    await ref
+                                        .read(invoiceRepoProvider)
+                                        .deleteItem(invoiceId, item.id);
+                                    _refresh();
+                                  });
+                                },
+                        ),
+                      ],
                     ),
-                  )),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 20),
 
               // Riwayat Pembayaran (DP & Pelunasan)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Pembayaran Diterima (DP / Cicilan)',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  FilledButton.tonalIcon(
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
+                  Text(
+                    'Pembayaran Diterima (DP / Cicilan)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: _busy
+                          ? null
+                          : () => _addPayment(context, ref, detail),
+                      icon: const Icon(Icons.add_card, size: 16),
+                      label: const Text('+ Catat DP'),
                     ),
-                    onPressed: () => _addPayment(context, ref, detail),
-                    icon: const Icon(Icons.add_card, size: 16),
-                    label: const Text('+ Catat DP'),
                   ),
                 ],
               ),
@@ -304,39 +463,70 @@ class InvoiceDetailScreen extends ConsumerWidget {
                   ),
                 )
               else
-                ...detail.payments.map((p) => Card(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      elevation: 0,
-                      color: AppColors.availableBg,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: const BorderSide(color: AppColors.border),
+                ...detail.payments.map(
+                  (p) => Card(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    elevation: 0,
+                    color: AppColors.availableBg,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: const BorderSide(color: AppColors.border),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.check_circle,
+                        color: AppColors.availableGreen,
                       ),
-                      child: ListTile(
-                        leading: const Icon(Icons.check_circle,
-                            color: AppColors.availableGreen),
-                        title: Text(
-                          formatCurrency(p.amount),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.availableGreen,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${formatDate(p.datePaid)} · ${p.paymentMethod}${p.notes.isNotEmpty ? ' (${p.notes})' : ''}',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              size: 18, color: Colors.red),
-                          onPressed: () async {
-                            await ref
-                                .read(invoiceRepoProvider)
-                                .deletePayment(invoiceId, p.id);
-                            ref.invalidate(invoiceDetailProvider(invoiceId));
-                          },
+                      title: Text(
+                        formatCurrency(p.amount),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.availableGreen,
                         ),
                       ),
-                    )),
+                      subtitle: Text(
+                        '${formatDate(p.datePaid)} · ${p.paymentMethod}${p.notes.isNotEmpty ? ' (${p.notes})' : ''}',
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: Colors.red,
+                        ),
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: const Text('Hapus pembayaran?'),
+                                    content: Text(formatCurrency(p.amount)),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext, false),
+                                        child: const Text('Batal'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogContext, true),
+                                        child: const Text('Hapus'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (ok != true || !mounted) return;
+                                await _run(() async {
+                                  await ref
+                                      .read(invoiceRepoProvider)
+                                      .deletePayment(invoiceId, p.id);
+                                  _refresh();
+                                });
+                              },
+                      ),
+                    ),
+                  ),
+                ),
 
               const SizedBox(height: 24),
 
@@ -360,12 +550,16 @@ class InvoiceDetailScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total Tagihan:',
-                            style: TextStyle(fontSize: 14)),
+                        const Text(
+                          'Total Tagihan:',
+                          style: TextStyle(fontSize: 14),
+                        ),
                         Text(
                           formatCurrency(detail.total),
                           style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold),
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -373,9 +567,13 @@ class InvoiceDetailScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Telah Dibayar (DP):',
-                            style: TextStyle(
-                                fontSize: 14, color: AppColors.availableGreen)),
+                        const Text(
+                          'Telah Dibayar (DP):',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.availableGreen,
+                          ),
+                        ),
                         Text(
                           formatCurrency(detail.paidAmount),
                           style: const TextStyle(
@@ -415,27 +613,6 @@ class InvoiceDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // Action buttons
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () => PdfService().exportInvoice(detail, settings),
-                icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('Export PDF Guest Folio'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () => ShareService().shareInvoice(detail, settings),
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('Kirim ke WhatsApp'),
-              ),
             ],
           ),
         );
@@ -455,11 +632,12 @@ class InvoiceDetailScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: desc,
-                decoration: const InputDecoration(
-                  labelText: 'Deskripsi',
-                  hintText: 'Mis: Extra Bed, Floating Breakfast',
-                )),
+              controller: desc,
+              decoration: const InputDecoration(
+                labelText: 'Deskripsi',
+                hintText: 'Mis: Extra Bed, Floating Breakfast',
+              ),
+            ),
             TextField(
               controller: qty,
               decoration: const InputDecoration(labelText: 'Qty'),
@@ -479,16 +657,20 @@ class InvoiceDetailScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Simpan'),
+          ),
         ],
       ),
     );
     if (ok == true && desc.text.trim().isNotEmpty) {
-      await ref.read(invoiceRepoProvider).addItem(
+      await ref
+          .read(invoiceRepoProvider)
+          .addItem(
             invoiceId: invoiceId,
             description: desc.text.trim(),
             qty: int.tryParse(qty.text) ?? 1,
@@ -502,15 +684,19 @@ class InvoiceDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _addPayment(
-      BuildContext context, WidgetRef ref, InvoiceDetail detail) async {
+    BuildContext context,
+    WidgetRef ref,
+    InvoiceDetail detail,
+  ) async {
     final defaultAmount = detail.remainingBalance > 0
         ? (detail.paidAmount == 0
-            ? (detail.total / 2).round()
-            : detail.remainingBalance)
+              ? (detail.total / 2).round()
+              : detail.remainingBalance)
         : detail.total;
 
-    final amountCtrl =
-        TextEditingController(text: formatCurrencyInput(defaultAmount));
+    final amountCtrl = TextEditingController(
+      text: formatCurrencyInput(defaultAmount),
+    );
     final notesCtrl = TextEditingController(
       text: detail.paidAmount == 0 ? 'DP 50%' : 'Pelunasan',
     );
@@ -536,15 +722,20 @@ class InvoiceDetailScreen extends ConsumerWidget {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: method,
-                decoration:
-                    const InputDecoration(labelText: 'Metode Pembayaran'),
+                decoration: const InputDecoration(
+                  labelText: 'Metode Pembayaran',
+                ),
                 items: const [
                   DropdownMenuItem(
-                      value: 'Transfer Bank', child: Text('Transfer Bank')),
+                    value: 'Transfer Bank',
+                    child: Text('Transfer Bank'),
+                  ),
                   DropdownMenuItem(value: 'Cash', child: Text('Cash / Tunai')),
                   DropdownMenuItem(value: 'QRIS', child: Text('QRIS')),
                   DropdownMenuItem(
-                      value: 'Kartu Kredit', child: Text('Kartu Kredit')),
+                    value: 'Kartu Kredit',
+                    child: Text('Kartu Kredit'),
+                  ),
                 ],
                 onChanged: (v) => setDialogState(() => method = v ?? method),
               ),
@@ -559,11 +750,13 @@ class InvoiceDetailScreen extends ConsumerWidget {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Batal')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Simpan Pembayaran')),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Simpan Pembayaran'),
+            ),
           ],
         ),
       ),
@@ -572,7 +765,9 @@ class InvoiceDetailScreen extends ConsumerWidget {
     if (ok == true) {
       final amt = parseCurrency(amountCtrl.text);
       if (amt > 0) {
-        await ref.read(invoiceRepoProvider).addPayment(
+        await ref
+            .read(invoiceRepoProvider)
+            .addPayment(
               invoiceId: invoiceId,
               amount: amt,
               paymentMethod: method,

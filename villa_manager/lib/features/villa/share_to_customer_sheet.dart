@@ -68,6 +68,9 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('$e')),
             data: (photos) {
+              final brochurePhotos = photos
+                  .where((photo) => photo.mediaType == 'photo')
+                  .toList();
               if (!_inited) {
                 if (photos.isNotEmpty) {
                   _selectedPhotos.add(photos.first.id);
@@ -96,21 +99,43 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Bagikan Info Villa',
-                          style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Bagikan Info Villa',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                         ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          BrochureService().exportSingleVillaBrochure(
-                            villa: widget.villa,
-                            photos: photos,
-                            settings: settings,
-                          );
-                        },
+                        onPressed: _sharing
+                            ? null
+                            : () async {
+                                setState(() => _sharing = true);
+                                try {
+                                  await BrochureService()
+                                      .exportSingleVillaBrochure(
+                                        villa: widget.villa,
+                                        photos: brochurePhotos,
+                                        settings: settings,
+                                      );
+                                  if (context.mounted) Navigator.pop(context);
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Gagal membuat brosur: $error',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) setState(() => _sharing = false);
+                                }
+                              },
                         icon: const Icon(Icons.picture_as_pdf, size: 16),
                         label: const Text('Brosur PDF'),
                       ),
@@ -163,16 +188,21 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                       const Text(
                         'Pesan WhatsApp (Bisa Diedit):',
                         style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.bold),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       TextButton.icon(
                         style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact),
+                          visualDensity: VisualDensity.compact,
+                        ),
                         onPressed: () =>
                             setState(() => _syncTemplateText(settings)),
                         icon: const Icon(Icons.refresh, size: 14),
-                        label: const Text('Reset Template',
-                            style: TextStyle(fontSize: 11)),
+                        label: const Text(
+                          'Reset Template',
+                          style: TextStyle(fontSize: 11),
+                        ),
                       ),
                     ],
                   ),
@@ -199,12 +229,16 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                       const Text(
                         'Pilih Foto untuk Dikirim:',
                         style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.bold),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         '${_selectedPhotos.length} dipilih',
                         style: TextStyle(
-                            fontSize: 11, color: Colors.grey.shade600),
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
@@ -217,7 +251,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        'Belum ada foto villa — hanya pesan teks yang akan dibagikan.',
+                        'Belum ada media villa - hanya pesan teks yang akan dibagikan.',
                         style: TextStyle(fontSize: 12),
                       ),
                     )
@@ -231,43 +265,69 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                         itemBuilder: (_, i) {
                           final ph = photos[i];
                           final sel = _selectedPhotos.contains(ph.id);
-                          return GestureDetector(
-                            onTap: () => setState(() {
-                              if (sel) {
-                                _selectedPhotos.remove(ph.id);
-                              } else {
-                                _selectedPhotos.add(ph.id);
-                              }
-                            }),
-                            child: Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(ph.filePath),
-                                    width: 90,
-                                    height: 90,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      width: 90,
-                                      height: 90,
-                                      color: Colors.grey.shade300,
-                                      child: const Icon(Icons.broken_image),
-                                    ),
+                          return Semantics(
+                            button: true,
+                            selected: sel,
+                            label: ph.mediaType == 'video'
+                                ? 'Pilih video villa'
+                                : 'Pilih foto villa',
+                            child: GestureDetector(
+                              onTap: () => setState(() {
+                                if (sel) {
+                                  _selectedPhotos.remove(ph.id);
+                                } else {
+                                  _selectedPhotos.add(ph.id);
+                                }
+                              }),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: ph.mediaType == 'video'
+                                        ? Container(
+                                            width: 90,
+                                            height: 90,
+                                            color: AppColors.primary,
+                                            child: const Icon(
+                                              Icons.play_circle_outline,
+                                              color: Colors.white,
+                                              size: 36,
+                                            ),
+                                          )
+                                        : Image.file(
+                                            File(ph.filePath),
+                                            width: 90,
+                                            height: 90,
+                                            cacheWidth: 270,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                Container(
+                                                  width: 90,
+                                                  height: 90,
+                                                  color: Colors.grey.shade300,
+                                                  child: const Icon(
+                                                    Icons.broken_image,
+                                                  ),
+                                                ),
+                                          ),
                                   ),
-                                ),
-                                if (sel)
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: CircleAvatar(
-                                      radius: 11,
-                                      backgroundColor: AppColors.availableGreen,
-                                      child: const Icon(Icons.check,
-                                          size: 14, color: Colors.white),
+                                  if (sel)
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: CircleAvatar(
+                                        radius: 11,
+                                        backgroundColor:
+                                            AppColors.availableGreen,
+                                        child: const Icon(
+                                          Icons.check,
+                                          size: 14,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -287,8 +347,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                             setState(() => _sharing = true);
                             try {
                               final chosen = photos
-                                  .where(
-                                      (p) => _selectedPhotos.contains(p.id))
+                                  .where((p) => _selectedPhotos.contains(p.id))
                                   .toList();
                               final textToSend = _textCtrl.text.trim();
                               await ShareService().shareVilla(
@@ -305,7 +364,8 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                           },
                     icon: const Icon(Icons.send),
                     label: Text(
-                        _sharing ? 'Membuka WhatsApp…' : 'Kirim via WhatsApp'),
+                      _sharing ? 'Membuka aplikasi…' : 'Bagikan ke pelanggan',
+                    ),
                   ),
                 ],
               );

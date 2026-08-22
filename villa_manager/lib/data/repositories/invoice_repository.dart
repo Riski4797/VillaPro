@@ -15,7 +15,10 @@ class InvoiceWithTotal {
   final int total;
   final int paidAmount;
 
-  int get remainingBalance => (total - paidAmount).clamp(0, 999999999);
+  int get remainingBalance {
+    final remaining = total - paidAmount;
+    return remaining > 0 ? remaining : 0;
+  }
 
   String get effectiveStatus {
     if (paidAmount >= total && total > 0) return 'paid';
@@ -50,7 +53,10 @@ class InvoiceDetail {
     return s;
   }
 
-  int get remainingBalance => (total - paidAmount).clamp(0, 999999999);
+  int get remainingBalance {
+    final remaining = total - paidAmount;
+    return remaining > 0 ? remaining : 0;
+  }
 
   String get effectiveStatus {
     if (paidAmount >= total && total > 0) return 'paid';
@@ -59,10 +65,10 @@ class InvoiceDetail {
   }
 
   String get statusLabel => switch (effectiveStatus) {
-        'paid' => 'LUNAS',
-        'partial' => 'DP DITERIMA',
-        _ => 'BELUM LUNAS',
-      };
+    'paid' => 'LUNAS',
+    'partial' => 'DP DITERIMA',
+    _ => 'BELUM LUNAS',
+  };
 }
 
 class InvoiceRepository {
@@ -71,65 +77,88 @@ class InvoiceRepository {
   static const _uuid = Uuid();
 
   Stream<List<InvoiceWithTotal>> watchAll({String? search}) {
-    final q = _db.select(_db.invoices)
-      ..orderBy([(t) => OrderingTerm.desc(t.dateIssued)]);
-    return q.watch().asyncMap((list) async {
-      final out = <InvoiceWithTotal>[];
-      for (final inv in list) {
-        if (search != null && search.trim().isNotEmpty) {
-          final s = search.trim().toLowerCase();
-          if (!inv.guestName.toLowerCase().contains(s) &&
-              !inv.invoiceNumber.toLowerCase().contains(s) &&
-              !inv.villaName.toLowerCase().contains(s)) {
-            continue;
-          }
-        }
-        final total = await _total(inv.id);
-        final paid = await _paidTotal(inv.id);
-        out.add(InvoiceWithTotal(
-          invoice: inv,
-          total: total,
-          paidAmount: paid,
-        ));
-      }
-      return out;
-    });
+    final term = search?.trim().toLowerCase();
+    final hasSearch = term != null && term.isNotEmpty;
+    final variables = <Variable>[];
+    if (hasSearch) {
+      variables.addAll([
+        Variable.withString(term),
+        Variable.withString(term),
+        Variable.withString(term),
+      ]);
+    }
+
+    return _db
+        .customSelect(
+          '''
+          SELECT invoices.*,
+                 COALESCE((
+                   SELECT SUM(qty * price)
+                   FROM invoice_items
+                   WHERE invoice_id = invoices.id
+                 ), 0) AS total,
+                 COALESCE((
+                   SELECT SUM(amount)
+                   FROM invoice_payments
+                   WHERE invoice_id = invoices.id
+                 ), 0) AS paid_amount
+          FROM invoices
+          ${hasSearch ? '''
+          WHERE INSTR(LOWER(guest_name), ?) > 0
+             OR INSTR(LOWER(invoice_number), ?) > 0
+             OR INSTR(LOWER(villa_name), ?) > 0
+          ''' : ''}
+          ORDER BY date_issued DESC
+          ''',
+          variables: variables,
+          readsFrom: {_db.invoices, _db.invoiceItems, _db.invoicePayments},
+        )
+        .watch()
+        .map(
+          (rows) => rows
+              .map(
+                (row) => InvoiceWithTotal(
+                  invoice: _db.invoices.map(row.data),
+                  total: row.read<int>('total'),
+                  paidAmount: row.read<int>('paid_amount'),
+                ),
+              )
+              .toList(),
+        );
   }
 
   Future<InvoiceDetail?> getDetail(String id) async {
-    final inv = await (_db.select(_db.invoices)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final inv = await (_db.select(
+      _db.invoices,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (inv == null) return null;
-    final items = await (_db.select(_db.invoiceItems)
-          ..where((t) => t.invoiceId.equals(id)))
-        .get();
-    final payments = await (_db.select(_db.invoicePayments)
-          ..where((t) => t.invoiceId.equals(id))
-          ..orderBy([(t) => OrderingTerm.asc(t.datePaid)]))
-        .get();
-    return InvoiceDetail(
-      invoice: inv,
-      items: items,
-      payments: payments,
+    final items = await (_db.select(
+      _db.invoiceItems,
+    )..where((t) => t.invoiceId.equals(id))).get();
+    final payments =
+        await (_db.select(_db.invoicePayments)
+              ..where((t) => t.invoiceId.equals(id))
+              ..orderBy([(t) => OrderingTerm.asc(t.datePaid)]))
+            .get();
+    return InvoiceDetail(invoice: inv, items: items, payments: payments);
+  }
+
+  Future<Invoice?> byBookingId(String bookingId) => (_db.select(
+    _db.invoices,
+  )..where((t) => t.bookingId.equals(bookingId))).getSingleOrNull();
+
+  Stream<Set<String>> watchBookingIdsWithInvoice() {
+    return (_db.selectOnly(
+      _db.invoices,
+    )..addColumns([_db.invoices.bookingId])).watch().map(
+      (rows) => rows.map((r) => r.read(_db.invoices.bookingId)!).toSet(),
     );
   }
 
-  Future<Invoice?> byBookingId(String bookingId) =>
-      (_db.select(_db.invoices)..where((t) => t.bookingId.equals(bookingId)))
-          .getSingleOrNull();
-
-  Stream<Set<String>> watchBookingIdsWithInvoice() {
-    return (_db.selectOnly(_db.invoices)
-          ..addColumns([_db.invoices.bookingId]))
-        .watch()
-        .map((rows) =>
-            rows.map((r) => r.read(_db.invoices.bookingId)!).toSet());
-  }
-
   Future<int> _total(String invoiceId) async {
-    final items = await (_db.select(_db.invoiceItems)
-          ..where((t) => t.invoiceId.equals(invoiceId)))
-        .get();
+    final items = await (_db.select(
+      _db.invoiceItems,
+    )..where((t) => t.invoiceId.equals(invoiceId))).get();
     var s = 0;
     for (final i in items) {
       s += i.qty * i.price;
@@ -137,22 +166,11 @@ class InvoiceRepository {
     return s;
   }
 
-  Future<int> _paidTotal(String invoiceId) async {
-    final payments = await (_db.select(_db.invoicePayments)
-          ..where((t) => t.invoiceId.equals(invoiceId)))
-        .get();
-    var s = 0;
-    for (final p in payments) {
-      s += p.amount;
-    }
-    return s;
-  }
-
   Future<String> _nextNumber(DateTime issued) async {
     final prefix = 'INV-${DateFormat('yyyyMM').format(issued)}-';
-    final existing = await (_db.select(_db.invoices)
-          ..where((t) => t.invoiceNumber.like('$prefix%')))
-        .get();
+    final existing = await (_db.select(
+      _db.invoices,
+    )..where((t) => t.invoiceNumber.like('$prefix%'))).get();
     var maxN = 0;
     for (final e in existing) {
       final part = e.invoiceNumber.split('-').last;
@@ -167,30 +185,47 @@ class InvoiceRepository {
     required Booking booking,
     required String villaName,
   }) async {
-    final existing = await byBookingId(booking.id);
-    if (existing != null) return existing.id;
+    return _db.transaction(() async {
+      final existing = await byBookingId(booking.id);
+      if (existing != null) return existing.id;
 
-    final now = DateTime.now();
-    final id = _uuid.v4();
-    final nights = nightsBetween(booking.checkIn, booking.checkOut);
-    await _db.into(_db.invoices).insert(InvoicesCompanion.insert(
-          id: id,
-          invoiceNumber: await _nextNumber(now),
-          bookingId: booking.id,
-          guestName: booking.guestName,
-          villaName: villaName,
-          checkIn: booking.checkIn,
-          checkOut: booking.checkOut,
-          dateIssued: now,
-        ));
-    await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
-          id: _uuid.v4(),
-          invoiceId: id,
-          description: 'Menginap $nights malam - $villaName',
-          qty: Value(nights < 1 ? 1 : nights),
-          price: Value(booking.pricePerNightSnapshot),
-        ));
-    return id;
+      final now = DateTime.now();
+      final id = _uuid.v4();
+      final nights = nightsBetween(booking.checkIn, booking.checkOut);
+      if (nights < 1) throw ArgumentError('Durasi booking tidak valid');
+
+      await _db
+          .into(_db.invoices)
+          .insert(
+            InvoicesCompanion.insert(
+              id: id,
+              invoiceNumber: await _nextNumber(now),
+              bookingId: booking.id,
+              guestName: booking.guestName,
+              villaName: villaName,
+              checkIn: booking.checkIn,
+              checkOut: booking.checkOut,
+              commissionTypeSnapshot: Value(booking.commissionTypeSnapshot),
+              commissionPercentSnapshot: Value(
+                booking.commissionPercentSnapshot,
+              ),
+              commissionFixedSnapshot: Value(booking.commissionFixedSnapshot),
+              dateIssued: now,
+            ),
+          );
+      await _db
+          .into(_db.invoiceItems)
+          .insert(
+            InvoiceItemsCompanion.insert(
+              id: _uuid.v4(),
+              invoiceId: id,
+              description: 'Menginap $nights malam - $villaName',
+              qty: Value(nights),
+              price: Value(booking.pricePerNightSnapshot),
+            ),
+          );
+      return id;
+    });
   }
 
   Future<void> addItem({
@@ -199,19 +234,49 @@ class InvoiceRepository {
     required int qty,
     required int price,
   }) async {
-    await _db.into(_db.invoiceItems).insert(InvoiceItemsCompanion.insert(
-          id: _uuid.v4(),
-          invoiceId: invoiceId,
-          description: description,
-          qty: Value(qty),
-          price: Value(price),
-        ));
-    await _syncInvoiceStatus(invoiceId);
+    if (description.trim().isEmpty) {
+      throw ArgumentError.value(description, 'description', 'Wajib diisi');
+    }
+    if (qty < 1) throw ArgumentError.value(qty, 'qty', 'Minimal 1');
+    if (price < 0) {
+      throw ArgumentError.value(price, 'price', 'Tidak boleh negatif');
+    }
+    await _db.transaction(() async {
+      await _db
+          .into(_db.invoiceItems)
+          .insert(
+            InvoiceItemsCompanion.insert(
+              id: _uuid.v4(),
+              invoiceId: invoiceId,
+              description: description.trim(),
+              qty: Value(qty),
+              price: Value(price),
+            ),
+          );
+      await _syncInvoiceStatus(invoiceId);
+    });
   }
 
   Future<void> deleteItem(String invoiceId, String itemId) async {
-    await (_db.delete(_db.invoiceItems)..where((t) => t.id.equals(itemId))).go();
-    await _syncInvoiceStatus(invoiceId);
+    await _db.transaction(() async {
+      final detail = await getDetail(invoiceId);
+      if (detail == null) throw StateError('Invoice tidak ditemukan');
+      final item = detail.items.where((row) => row.id == itemId).firstOrNull;
+      if (item == null) throw StateError('Item invoice tidak ditemukan');
+      final newTotal = detail.total - item.qty * item.price;
+      if (newTotal <= 0 || detail.paidAmount > newTotal) {
+        throw StateError(
+          'Item tidak dapat dihapus karena pembayaran sudah tercatat',
+        );
+      }
+      final deleted =
+          await (_db.delete(_db.invoiceItems)..where(
+                (t) => t.id.equals(itemId) & t.invoiceId.equals(invoiceId),
+              ))
+              .go();
+      if (deleted != 1) throw StateError('Item invoice tidak ditemukan');
+      await _syncInvoiceStatus(invoiceId);
+    });
   }
 
   Future<void> addPayment({
@@ -221,41 +286,81 @@ class InvoiceRepository {
     String paymentMethod = 'Transfer Bank',
     String notes = '',
   }) async {
-    await _db.into(_db.invoicePayments).insert(InvoicePaymentsCompanion.insert(
-          id: _uuid.v4(),
-          invoiceId: invoiceId,
-          amount: Value(amount),
-          datePaid: datePaid ?? DateTime.now(),
-          paymentMethod: Value(paymentMethod),
-          notes: Value(notes),
-        ));
-    await _syncInvoiceStatus(invoiceId);
+    if (amount <= 0) {
+      throw ArgumentError.value(amount, 'amount', 'Harus lebih dari 0');
+    }
+    await _db.transaction(() async {
+      final detail = await getDetail(invoiceId);
+      if (detail == null) throw StateError('Invoice tidak ditemukan');
+      if (amount > detail.remainingBalance) {
+        throw ArgumentError('Pembayaran melebihi sisa tagihan');
+      }
+      await _db
+          .into(_db.invoicePayments)
+          .insert(
+            InvoicePaymentsCompanion.insert(
+              id: _uuid.v4(),
+              invoiceId: invoiceId,
+              amount: Value(amount),
+              datePaid: datePaid ?? DateTime.now(),
+              paymentMethod: Value(paymentMethod.trim()),
+              notes: Value(notes.trim()),
+            ),
+          );
+      await _syncInvoiceStatus(invoiceId);
+    });
   }
 
   Future<void> deletePayment(String invoiceId, String paymentId) async {
-    await (_db.delete(_db.invoicePayments)
-          ..where((t) => t.id.equals(paymentId)))
-        .go();
-    await _syncInvoiceStatus(invoiceId);
+    await _db.transaction(() async {
+      final deleted =
+          await (_db.delete(_db.invoicePayments)..where(
+                (t) => t.id.equals(paymentId) & t.invoiceId.equals(invoiceId),
+              ))
+              .go();
+      if (deleted != 1) throw StateError('Pembayaran tidak ditemukan');
+      await _syncInvoiceStatus(invoiceId);
+    });
+  }
+
+  Future<void> clearPayments(String invoiceId) async {
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.invoicePayments,
+      )..where((t) => t.invoiceId.equals(invoiceId))).go();
+      await _syncInvoiceStatus(invoiceId);
+    });
   }
 
   Future<void> _syncInvoiceStatus(String invoiceId) async {
     final total = await _total(invoiceId);
-    final paid = await _paidTotal(invoiceId);
+    final payments =
+        await (_db.select(_db.invoicePayments)
+              ..where((t) => t.invoiceId.equals(invoiceId))
+              ..orderBy([(t) => OrderingTerm.asc(t.datePaid)]))
+            .get();
+    final paid = payments.fold<int>(0, (sum, payment) => sum + payment.amount);
     String status = 'unpaid';
     DateTime? datePaid;
     if (paid >= total && total > 0) {
       status = 'paid';
-      datePaid = DateTime.now();
+      var runningTotal = 0;
+      for (final payment in payments) {
+        runningTotal += payment.amount;
+        if (runningTotal >= total) {
+          datePaid = payment.datePaid;
+          break;
+        }
+      }
     } else if (paid > 0) {
       status = 'partial';
     }
 
-    await (_db.update(_db.invoices)..where((t) => t.id.equals(invoiceId)))
-        .write(InvoicesCompanion(
-      status: Value(status),
-      datePaid: Value(datePaid),
-    ));
+    await (_db.update(
+      _db.invoices,
+    )..where((t) => t.id.equals(invoiceId))).write(
+      InvoicesCompanion(status: Value(status), datePaid: Value(datePaid)),
+    );
   }
 
   Future<void> markReminderSent(String id) {
@@ -266,18 +371,33 @@ class InvoiceRepository {
 
   Future<int> countOverdueUnpaid({int olderThanDays = 3}) async {
     final cutoff = DateTime.now().subtract(Duration(days: olderThanDays));
-    final list = await (_db.select(_db.invoices)
-          ..where((t) => t.status.isNotIn(['paid'])))
-        .get();
-    return list.where((i) => i.dateIssued.isBefore(cutoff)).length;
+    final row = await _db
+        .customSelect(
+          '''
+      SELECT COUNT(*) AS count
+      FROM invoices
+      WHERE status != 'paid' AND date_issued < ?
+      ''',
+          variables: [Variable.withDateTime(cutoff)],
+        )
+        .getSingle();
+    return row.read<int>('count');
+  }
+
+  Stream<int> watchOverdueUnpaid() {
+    return _db
+        .customSelect(
+          'SELECT 1',
+          readsFrom: {_db.invoices, _db.invoiceItems, _db.invoicePayments},
+        )
+        .watch()
+        .asyncMap((_) => countOverdueUnpaid());
   }
 
   Future<void> delete(String id) async {
-    await (_db.delete(_db.invoicePayments)
-          ..where((t) => t.invoiceId.equals(id)))
-        .go();
-    await (_db.delete(_db.invoiceItems)..where((t) => t.invoiceId.equals(id)))
-        .go();
-    await (_db.delete(_db.invoices)..where((t) => t.id.equals(id))).go();
+    final deleted = await (_db.delete(
+      _db.invoices,
+    )..where((t) => t.id.equals(id))).go();
+    if (deleted != 1) throw StateError('Invoice tidak ditemukan');
   }
 }

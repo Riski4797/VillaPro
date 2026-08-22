@@ -54,8 +54,7 @@ class BookingListScreen extends ConsumerWidget {
           ),
           Expanded(
             child: bookings.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (list) {
                 if (list.isEmpty) {
@@ -63,8 +62,11 @@ class BookingListScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.calendar_today_outlined,
-                            size: 56, color: Colors.grey),
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          size: 56,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 12),
                         Text('Belum ada data booking'),
                       ],
@@ -79,10 +81,7 @@ class BookingListScreen extends ConsumerWidget {
                     final row = list[i];
                     final b = row.booking;
                     final hasInvoice = invoiceIds.contains(b.id);
-                    return _BookingCard(
-                      row: row,
-                      hasInvoice: hasInvoice,
-                    );
+                    return _BookingCard(row: row, hasInvoice: hasInvoice);
                   },
                 );
               },
@@ -100,10 +99,7 @@ class BookingListScreen extends ConsumerWidget {
 }
 
 class _BookingCard extends ConsumerWidget {
-  const _BookingCard({
-    required this.row,
-    required this.hasInvoice,
-  });
+  const _BookingCard({required this.row, required this.hasInvoice});
   final BookingWithVilla row;
   final bool hasInvoice;
 
@@ -147,14 +143,17 @@ class _BookingCard extends ConsumerWidget {
                       child: thumb.when(
                         loading: () => const ColoredBox(color: Colors.black12),
                         error: (_, __) => const ColoredBox(
-                            color: Colors.black12,
-                            child: Icon(Icons.home, size: 24)),
+                          color: Colors.black12,
+                          child: Icon(Icons.home, size: 24),
+                        ),
                         data: (ph) => ph == null
                             ? const ColoredBox(
                                 color: Colors.black12,
-                                child: Icon(Icons.home, size: 24))
+                                child: Icon(Icons.home, size: 24),
+                              )
                             : Image.file(
                                 File(ph.filePath),
+                                cacheWidth: 162,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) =>
                                     const ColoredBox(color: Colors.black12),
@@ -172,9 +171,7 @@ class _BookingCard extends ConsumerWidget {
                             Expanded(
                               child: Text(
                                 row.villaName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -182,7 +179,9 @@ class _BookingCard extends ConsumerWidget {
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: badgeBg,
                                 borderRadius: BorderRadius.circular(6),
@@ -201,28 +200,23 @@ class _BookingCard extends ConsumerWidget {
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            Icon(Icons.person,
-                                size: 14, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Text(
-                              b.guestName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.w500),
+                            Icon(
+                              Icons.person,
+                              size: 14,
+                              color: Colors.grey.shade600,
                             ),
-                            if (b.guestContact.isNotEmpty) ...[
-                              Text(' · ',
-                                  style: TextStyle(
-                                      color: Colors.grey.shade500)),
-                              Text(
-                                b.guestContact,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                b.guestContact.isEmpty
+                                    ? b.guestName
+                                    : '${b.guestName} · ${b.guestContact}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.w500),
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ],
@@ -231,20 +225,26 @@ class _BookingCard extends ConsumerWidget {
                 ],
               ),
               const Divider(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final info = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.date_range,
-                              size: 14, color: Colors.grey.shade600),
+                          Icon(
+                            Icons.date_range,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${formatDate(b.checkIn)} → ${formatDate(b.checkOut)} ($nights mlm)',
-                            style: Theme.of(context).textTheme.bodySmall,
+                          Flexible(
+                            child: Text(
+                              '${formatDate(b.checkIn)} s.d. ${formatDate(b.checkOut)} ($nights mlm)',
+                              style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -258,71 +258,102 @@ class _BookingCard extends ConsumerWidget {
                         ),
                       ),
                     ],
-                  ),
-                  if (b.status != 'cancelled')
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                  );
+                  final actions = b.status == 'cancelled'
+                      ? const SizedBox.shrink()
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Bagikan info tamu ke penjaga',
+                              icon: const Icon(Icons.key, size: 18),
+                              onPressed: () async {
+                                final villa = await ref
+                                    .read(villaRepoProvider)
+                                    .getById(b.villaId);
+                                if (villa == null) return;
+                                final settings = ref
+                                    .read(appSettingsProvider)
+                                    .valueOrNull;
+                                final msg = butlerNotificationText(
+                                  villa: villa,
+                                  booking: b,
+                                  settings: settings,
+                                );
+                                await ShareService().shareTextOnly(msg);
+                              },
+                            ),
+                            const SizedBox(width: 4),
+                            hasInvoice
+                                ? OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.check, size: 15),
+                                    label: const Text('Invoice Ada'),
+                                    onPressed: () async {
+                                      final inv = await ref
+                                          .read(invoiceRepoProvider)
+                                          .byBookingId(b.id);
+                                      if (inv != null && context.mounted) {
+                                        context.push('/invoices/${inv.id}');
+                                      }
+                                    },
+                                  )
+                                : FilledButton.tonalIcon(
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.receipt_long,
+                                      size: 15,
+                                    ),
+                                    label: const Text('Buat Invoice'),
+                                    onPressed: () async {
+                                      final id = await ref
+                                          .read(invoiceRepoProvider)
+                                          .createFromBooking(
+                                            booking: b,
+                                            villaName: row.villaName,
+                                          );
+                                      if (context.mounted) {
+                                        context.push('/invoices/$id');
+                                      }
+                                    },
+                                  ),
+                          ],
+                        );
+                  if (constraints.maxWidth < 420) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(
-                          tooltip: 'Kirim Info Tamu ke Penjaga (WA)',
-                          icon: const Icon(Icons.key, size: 18),
-                          onPressed: () async {
-                            final villa = await ref
-                                .read(villaRepoProvider)
-                                .getById(b.villaId);
-                            if (villa == null) return;
-                            final settings =
-                                ref.read(appSettingsProvider).valueOrNull;
-                            final msg = butlerNotificationText(
-                              villa: villa,
-                              booking: b,
-                              settings: settings,
-                            );
-                            await ShareService().shareTextOnly(msg);
-                          },
-                        ),
-                        const SizedBox(width: 4),
-                        hasInvoice
-                            ? OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                ),
-                                icon: const Icon(Icons.check, size: 15),
-                                label: const Text('Invoice Ada'),
-                                onPressed: () async {
-                                  final inv = await ref
-                                      .read(invoiceRepoProvider)
-                                      .byBookingId(b.id);
-                                  if (inv != null && context.mounted) {
-                                    context.push('/invoices/${inv.id}');
-                                  }
-                                },
-                              )
-                            : FilledButton.tonalIcon(
-                                style: FilledButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                ),
-                                icon: const Icon(Icons.receipt_long, size: 15),
-                                label: const Text('Buat Invoice'),
-                                onPressed: () async {
-                                  final id = await ref
-                                      .read(invoiceRepoProvider)
-                                      .createFromBooking(
-                                        booking: b,
-                                        villaName: row.villaName,
-                                      );
-                                  if (context.mounted) {
-                                    context.push('/invoices/$id');
-                                  }
-                                },
-                              ),
+                        info,
+                        if (b.status != 'cancelled') ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: actions,
+                          ),
+                        ],
                       ],
-                    ),
-                ],
+                    );
+                  }
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: info),
+                      actions,
+                    ],
+                  );
+                },
               ),
             ],
           ),

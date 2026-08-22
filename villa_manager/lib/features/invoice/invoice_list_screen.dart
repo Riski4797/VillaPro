@@ -46,8 +46,7 @@ class InvoiceListScreen extends ConsumerWidget {
           ),
           Expanded(
             child: list.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Error: $e')),
               data: (items) {
                 if (items.isEmpty) {
@@ -55,8 +54,11 @@ class InvoiceListScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.receipt_long_outlined,
-                            size: 56, color: Colors.grey),
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 56,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 12),
                         Text('Belum ada data invoice'),
                       ],
@@ -74,20 +76,20 @@ class InvoiceListScreen extends ConsumerWidget {
 
                     final (badgeBg, badgeFg, label) = switch (status) {
                       'paid' => (
-                          Colors.green.shade50,
-                          Colors.green.shade900,
-                          'LUNAS'
-                        ),
+                        Colors.green.shade50,
+                        Colors.green.shade900,
+                        'LUNAS',
+                      ),
                       'partial' => (
-                          Colors.orange.shade50,
-                          Colors.orange.shade900,
-                          'DP MASUK'
-                        ),
+                        Colors.orange.shade50,
+                        Colors.orange.shade900,
+                        'DP MASUK',
+                      ),
                       _ => (
-                          Colors.red.shade50,
-                          Colors.red.shade900,
-                          'BELUM BAYAR'
-                        ),
+                        Colors.red.shade50,
+                        Colors.red.shade900,
+                        'BELUM BAYAR',
+                      ),
                     };
 
                     return Card(
@@ -113,12 +115,15 @@ class InvoiceListScreen extends ConsumerWidget {
                                           .textTheme
                                           .titleMedium
                                           ?.copyWith(
-                                              fontWeight: FontWeight.bold),
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 3),
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: badgeBg,
                                       borderRadius: BorderRadius.circular(6),
@@ -144,9 +149,7 @@ class InvoiceListScreen extends ConsumerWidget {
                               ),
                               Text(
                                 'Jadwal: ${formatDate(inv.checkIn)} → ${formatDate(inv.checkOut)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(color: Colors.grey.shade600),
                               ),
                               const Divider(height: 18),
@@ -177,8 +180,10 @@ class InvoiceListScreen extends ConsumerWidget {
                                         ),
                                     ],
                                   ),
-                                  const Icon(Icons.chevron_right,
-                                      color: Colors.grey),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.grey,
+                                  ),
                                 ],
                               ),
                             ],

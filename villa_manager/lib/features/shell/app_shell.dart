@@ -18,7 +18,9 @@ class AppShell extends ConsumerWidget {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.surface,
-          border: const Border(top: BorderSide(color: AppColors.border, width: 1)),
+          border: const Border(
+            top: BorderSide(color: AppColors.border, width: 1),
+          ),
           boxShadow: [
             BoxShadow(
               color: AppColors.textPrimary.withValues(alpha: 0.04),
@@ -47,8 +49,10 @@ class AppShell extends ConsumerWidget {
             ),
             const NavigationDestination(
               icon: Icon(Icons.calendar_month_outlined),
-              selectedIcon:
-                  Icon(Icons.calendar_month, color: AppColors.primary),
+              selectedIcon: Icon(
+                Icons.calendar_month,
+                color: AppColors.primary,
+              ),
               label: 'Booking',
             ),
             NavigationDestination(
@@ -64,8 +68,7 @@ class AppShell extends ConsumerWidget {
                 textColor: AppColors.textPrimary,
                 isLabelVisible: overdue > 0,
                 label: Text('$overdue'),
-                child:
-                    const Icon(Icons.receipt_long, color: AppColors.primary),
+                child: const Icon(Icons.receipt_long, color: AppColors.primary),
               ),
               label: 'Invoice',
             ),

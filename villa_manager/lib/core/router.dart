@@ -25,10 +25,7 @@ final appRouter = GoRouter(
       branches: [
         StatefulShellBranch(
           routes: [
-            GoRoute(
-              path: '/',
-              builder: (_, __) => const DashboardScreen(),
-            ),
+            GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
           ],
         ),
         StatefulShellBranch(
@@ -69,8 +66,8 @@ final appRouter = GoRouter(
                 ),
                 GoRoute(
                   path: ':id/edit',
-                  builder: (_, state) => BookingFormScreen(
-                      bookingId: state.pathParameters['id']),
+                  builder: (_, state) =>
+                      BookingFormScreen(bookingId: state.pathParameters['id']),
                 ),
               ],
             ),
@@ -85,7 +82,8 @@ final appRouter = GoRouter(
                 GoRoute(
                   path: ':id',
                   builder: (_, state) => InvoiceDetailScreen(
-                      invoiceId: state.pathParameters['id']!),
+                    invoiceId: state.pathParameters['id']!,
+                  ),
                 ),
               ],
             ),

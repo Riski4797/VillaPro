@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:flutter/services.dart';
 
 import '../core/utils/formatters.dart';
 import '../data/database/app_database.dart';
@@ -15,8 +15,11 @@ class BrochureService {
     required List<VillaPhoto> photos,
     AppSetting? settings,
   }) async {
-    final bytes =
-        await buildSingleVillaBytes(villa: villa, photos: photos, settings: settings);
+    final bytes = await buildSingleVillaBytes(
+      villa: villa,
+      photos: photos,
+      settings: settings,
+    );
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: 'Brosur-${villa.name.replaceAll(' ', '_')}.pdf',
@@ -28,7 +31,20 @@ class BrochureService {
     required List<VillaPhoto> photos,
     AppSetting? settings,
   }) async {
-    final doc = pw.Document();
+    final font = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PlusJakartaSans.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PlusJakartaSans-Italic.ttf'),
+    );
+    final doc = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: font,
+        bold: font,
+        italic: italic,
+        boldItalic: italic,
+      ),
+    );
     final usps = VillaRepository.decodeList(villa.uniqueSellingPoints);
     final amenities = VillaRepository.decodeList(villa.amenities);
 
@@ -45,7 +61,7 @@ class BrochureService {
 
     // Load photo images into memory
     final loadedImages = <pw.MemoryImage>[];
-    for (final ph in photos.take(5)) {
+    for (final ph in photos.where((ph) => ph.mediaType == 'photo').take(5)) {
       final f = File(ph.filePath);
       if (f.existsSync()) {
         try {
@@ -114,8 +130,10 @@ class BrochureService {
                 ],
               ),
               pw.Container(
-                padding:
-                    const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: pw.BoxDecoration(
                   color: primaryColor,
                   borderRadius: pw.BorderRadius.circular(4),
@@ -202,7 +220,9 @@ class BrochureService {
               ),
               pw.Container(
                 padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: pw.BoxDecoration(
                   color: lightBg,
                   borderRadius: pw.BorderRadius.circular(6),
@@ -275,8 +295,12 @@ class BrochureService {
                     spacing: 12,
                     runSpacing: 4,
                     children: usps
-                        .map((u) => pw.Text('- $u',
-                            style: const pw.TextStyle(fontSize: 9)))
+                        .map(
+                          (u) => pw.Text(
+                            '- $u',
+                            style: const pw.TextStyle(fontSize: 9),
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -302,14 +326,18 @@ class BrochureService {
               children: amenities.map((a) {
                 return pw.Container(
                   padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: pw.BoxDecoration(
                     color: PdfColors.grey100,
                     borderRadius: pw.BorderRadius.circular(4),
                     border: pw.Border.all(color: PdfColors.grey300),
                   ),
-                  child: pw.Text('- $a',
-                      style: const pw.TextStyle(fontSize: 8.5)),
+                  child: pw.Text(
+                    '- $a',
+                    style: const pw.TextStyle(fontSize: 8.5),
+                  ),
                 );
               }).toList(),
             ),
@@ -333,7 +361,7 @@ class BrochureService {
               ['Akhir Pekan (Weekend)', formatCurrency(villa.priceWeekend)],
               [
                 'Musim Liburan (High Season)',
-                formatCurrency(villa.priceHighSeason)
+                formatCurrency(villa.priceHighSeason),
               ],
             ],
             headerStyle: pw.TextStyle(
@@ -342,10 +370,14 @@ class BrochureService {
               color: PdfColors.white,
             ),
             headerDecoration: const pw.BoxDecoration(color: primaryColor),
-            headerPadding:
-                const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            cellPadding:
-                const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            headerPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellAlignments: {
               0: pw.Alignment.centerLeft,
@@ -388,7 +420,9 @@ class BrochureService {
                 ),
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: pw.BoxDecoration(
                     color: goldColor,
                     borderRadius: pw.BorderRadius.circular(4),
@@ -495,8 +529,10 @@ class BrochureService {
                         ),
                       ),
                       if (v.location.isNotEmpty)
-                        pw.Text('Lokasi: ${v.location}',
-                            style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                          'Lokasi: ${v.location}',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
                     ],
                   ),
                 ),
@@ -518,15 +554,21 @@ class BrochureService {
             ],
 
             if (usps.isNotEmpty) ...[
-              pw.Text('Keunggulan: ${usps.join(" · ")}',
-                  style: pw.TextStyle(
-                      fontSize: 9, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                'Keunggulan: ${usps.join(" · ")}',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
               pw.SizedBox(height: 8),
             ],
 
             if (amenities.isNotEmpty) ...[
-              pw.Text('Fasilitas: ${amenities.take(8).join(", ")}',
-                  style: const pw.TextStyle(fontSize: 9)),
+              pw.Text(
+                'Fasilitas: ${amenities.take(8).join(", ")}',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
               pw.SizedBox(height: 12),
             ],
 
@@ -534,11 +576,14 @@ class BrochureService {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Kontak Reservasi: $adminContact',
-                    style: const pw.TextStyle(fontSize: 8.5)),
                 pw.Text(
-                    'Weekend: ${formatCurrency(v.priceWeekend)} · High Season: ${formatCurrency(v.priceHighSeason)}',
-                    style: const pw.TextStyle(fontSize: 8.5)),
+                  'Kontak Reservasi: $adminContact',
+                  style: const pw.TextStyle(fontSize: 8.5),
+                ),
+                pw.Text(
+                  'Weekend: ${formatCurrency(v.priceWeekend)} · High Season: ${formatCurrency(v.priceHighSeason)}',
+                  style: const pw.TextStyle(fontSize: 8.5),
+                ),
               ],
             ),
           ],

@@ -17,28 +17,30 @@ void main() {
 
   tearDown(() => db.close());
 
-  test('watchOccupancyStatus detects occupied vs available correctly',
-      () async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final villaId = await villaRepo.upsert(name: 'Villa Kupu');
+  test(
+    'watchOccupancyStatus detects occupied vs available correctly',
+    () async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final villaId = await villaRepo.upsert(name: 'Villa Kupu');
 
-    // Initially available
-    var status = await bookingRepo.watchOccupancyStatus(villaId).first;
-    expect(status.isOccupiedToday, false);
+      // Initially available
+      var status = await bookingRepo.watchOccupancyStatus(villaId).first;
+      expect(status.isOccupiedToday, false);
 
-    // Booked for today
-    await bookingRepo.upsert(
-      villaId: villaId,
-      guestName: 'Andi',
-      guestContact: '0811111',
-      checkIn: today.subtract(const Duration(days: 1)),
-      checkOut: today.add(const Duration(days: 2)),
-      pricePerNightSnapshot: 1500000,
-    );
+      // Booked for today
+      await bookingRepo.upsert(
+        villaId: villaId,
+        guestName: 'Andi',
+        guestContact: '0811111',
+        checkIn: today.subtract(const Duration(days: 1)),
+        checkOut: today.add(const Duration(days: 2)),
+        pricePerNightSnapshot: 1500000,
+      );
 
-    status = await bookingRepo.watchOccupancyStatus(villaId).first;
-    expect(status.isOccupiedToday, true);
-    expect(status.currentBooking?.guestName, 'Andi');
-  });
+      status = await bookingRepo.watchOccupancyStatus(villaId).first;
+      expect(status.isOccupiedToday, true);
+      expect(status.currentBooking?.guestName, 'Andi');
+    },
+  );
 }

@@ -23,7 +23,7 @@ Dokumen ini adalah spesifikasi teknis untuk AI coding agent membangun aplikasi d
 | Kebutuhan | Package |
 |---|---|
 | State management | `flutter_riverpod` |
-| Database lokal | `drift` (di atas `sqlite3_flutter_libs`) |
+| Database lokal | `drift` (di atas native assets `sqlite3`) |
 | Notifikasi lokal | `flutter_local_notifications` |
 | Share ke WhatsApp (teks+gambar) | `share_plus` |
 | Generate PDF | `pdf` + `printing` |
@@ -286,7 +286,7 @@ Semua template dibuat sebagai fungsi murni di `core/utils/message_templates.dart
 - Tombol di Settings: "Export Semua Data"
 - Proses: serialize semua tabel (villas, villa_photos, villa_faqs, bookings, invoices, invoice_items) ke JSON, copy semua file foto ke folder sementara, compress semuanya jadi satu file `.zip` (nama file: `villamanager-backup-YYYYMMDD.zip`) pakai package `archive`
 - Setelah zip terbentuk, panggil `share_plus` supaya user bisa simpan ke Google Drive/kirim ke email sendiri, dll (bukan auto-upload — hanya membuka opsi simpan)
-- **Import tidak dibangun di v1** — cukup catat sebagai technical debt/masa depan di komentar kode
+- Restore dari backup terenkripsi dilakukan melalui menu Settings; tidak ada sinkronisasi cloud otomatis.
 
 ## 10. Non-Functional Requirements
 
@@ -300,7 +300,6 @@ Semua template dibuat sebagai fungsi murni di `core/utils/message_templates.dart
 
 - Multi-user / akses tim
 - Sinkronisasi cloud otomatis
-- Import data dari backup
 - Payment gateway / pembayaran online
 - Multi-bahasa (Inggris dll)
 - iOS (fokus Android dulu meski Flutter cross-platform)

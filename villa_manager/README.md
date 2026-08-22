@@ -9,12 +9,11 @@ Offline Flutter app for villa marketers. Spec: `../villa-manager-blueprint.md`.
 - Invoice dari booking, item, lunas, PDF, kirim WA
 - Dashboard + Laporan omzet/komisi
 - Notifikasi check-in H-1 + reminder invoice unpaid >3 hari
-- Backup ZIP (`villamanager-backup-YYYYMMDD.zip`) via share sheet
+- Backup dan restore ZIP terenkripsi password
 - Bottom nav: Dashboard | Villa | Booking | Invoice
 
 ## Out of v1
 
-- Import dari backup
 - Grafik `fl_chart`
 - Cloud sync / multi-user / iOS focus
 

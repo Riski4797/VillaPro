@@ -25,27 +25,38 @@ final villaListProvider = StreamProvider<List<Villa>>((ref) {
   return repo.watchSearch(search, activeOnly: activeOnly);
 });
 
-final villaDetailProvider = StreamProvider.family<Villa?, String>(
+final allVillasProvider = StreamProvider<List<Villa>>(
+  (ref) => ref.watch(villaRepoProvider).watchAll(activeOnly: false),
+);
+
+final villaDetailProvider = StreamProvider.autoDispose.family<Villa?, String>(
   (ref, id) => ref.watch(villaRepoProvider).watchById(id),
 );
 
-final villaPhotosProvider = StreamProvider.family<List<VillaPhoto>, String>(
-  (ref, villaId) => ref.watch(villaRepoProvider).watchPhotos(villaId),
-);
+final villaPhotosProvider = StreamProvider.autoDispose
+    .family<List<VillaPhoto>, String>(
+      (ref, villaId) => ref.watch(villaRepoProvider).watchPhotos(villaId),
+    );
 
-final villaFaqsProvider = StreamProvider.family<List<VillaFaq>, String>(
-  (ref, villaId) => ref.watch(villaRepoProvider).watchFaqs(villaId),
-);
+final villaFaqsProvider = StreamProvider.autoDispose
+    .family<List<VillaFaq>, String>(
+      (ref, villaId) => ref.watch(villaRepoProvider).watchFaqs(villaId),
+    );
 
-final villaThumbProvider = StreamProvider.family<VillaPhoto?, String>(
-  (ref, villaId) => ref.watch(villaRepoProvider).watchFirstPhoto(villaId),
-);
+final villaThumbProvider = StreamProvider.autoDispose
+    .family<VillaPhoto?, String>(
+      (ref, villaId) => ref.watch(villaRepoProvider).watchFirstPhoto(villaId),
+    );
 
-final villaOccupancyProvider =
-    StreamProvider.family<VillaOccupancyStatus, String>(
-  (ref, villaId) =>
-      ref.watch(bookingRepoProvider).watchOccupancyStatus(villaId),
-);
+final villaOccupancyProvider = StreamProvider.autoDispose
+    .family<VillaOccupancyStatus, String>(
+      (ref, villaId) => ref
+          .watch(bookingRepoProvider)
+          .watchOccupancyStatus(
+            villaId,
+            onDate: ref.watch(todayProvider).valueOrNull,
+          ),
+    );
 
 class SmartMatcherFilter {
   const SmartMatcherFilter({
@@ -66,11 +77,13 @@ class SmartMatcherFilter {
       (locationQuery != null && locationQuery!.trim().isNotEmpty);
 }
 
-final smartMatcherFilterProvider =
-    StateProvider<SmartMatcherFilter>((_) => const SmartMatcherFilter());
+final smartMatcherFilterProvider = StateProvider<SmartMatcherFilter>(
+  (_) => const SmartMatcherFilter(),
+);
 
 final smartMatchedVillasProvider = FutureProvider<List<Villa>>((ref) async {
   final filter = ref.watch(smartMatcherFilterProvider);
+  ref.watch(bookingListProvider);
   final repo = ref.watch(villaRepoProvider);
   final activeOnly = ref.watch(villaActiveOnlyProvider);
   if (!filter.isActive) {

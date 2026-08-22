@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -17,10 +20,15 @@ class NotificationService {
     if (_ready) return;
     try {
       tzdata.initializeTimeZones();
+      if (!kIsWeb && Platform.isLinux) {
+        _ready = true;
+        return;
+      }
       try {
-        tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+        final timezone = await FlutterTimezone.getLocalTimezone();
+        tz.setLocalLocation(tz.getLocation(timezone.identifier));
       } catch (_) {
-        tz.setLocalLocation(tz.local);
+        tz.setLocalLocation(tz.getLocation('Asia/Makassar'));
       }
 
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -31,21 +39,31 @@ class NotificationService {
         ),
       );
 
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.requestNotificationsPermission();
-
       _ready = true;
     } catch (e) {
       debugPrint('NotificationService init error (ignored): $e');
     }
   }
 
-  int _idFromBooking(String bookingId) =>
-      bookingId.hashCode & 0x7fffffff; // positive 31-bit
+  int _idFromBooking(String bookingId) {
+    var hash = 0x811c9dc5;
+    for (final byte in bookingId.codeUnits) {
+      hash = ((hash ^ byte) * 0x01000193) & 0xffffffff;
+    }
+    return hash & 0x7fffffff;
+  }
+
+  Future<bool> _ensurePermission() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    return await androidPlugin?.requestNotificationsPermission() ?? true;
+  }
 
   Future<void> cancelCheckIn(String bookingId) async {
     try {
+      if (!kIsWeb && Platform.isLinux) return;
       if (!_ready) await init();
       await _plugin.cancel(id: _idFromBooking(bookingId));
     } catch (e) {
@@ -62,12 +80,18 @@ class NotificationService {
     required String status,
   }) async {
     try {
+      if (!kIsWeb && Platform.isLinux) return;
       if (!_ready) await init();
+      if (!_ready) return;
       await cancelCheckIn(bookingId);
       if (status != 'confirmed') return;
+      if (!await _ensurePermission()) return;
 
-      final dayBefore = DateTime(checkIn.year, checkIn.month, checkIn.day)
-          .subtract(const Duration(days: 1));
+      final dayBefore = DateTime(
+        checkIn.year,
+        checkIn.month,
+        checkIn.day,
+      ).subtract(const Duration(days: 1));
       final when = tz.TZDateTime(
         tz.local,
         dayBefore.year,
@@ -98,9 +122,11 @@ class NotificationService {
     }
   }
 
-  Future<void> showUnpaidReminder(Invoice invoice) async {
+  Future<bool> showUnpaidReminder(Invoice invoice) async {
     try {
+      if (!kIsWeb && Platform.isLinux) return false;
       if (!_ready) await init();
+      if (!_ready || !await _ensurePermission()) return false;
       final id = (invoice.id.hashCode & 0x7fffffff) ^ 0x10000000;
       await _plugin.show(
         id: id,
@@ -116,8 +142,10 @@ class NotificationService {
           ),
         ),
       );
+      return true;
     } catch (e) {
       debugPrint('showUnpaidReminder error: $e');
+      return false;
     }
   }
 
@@ -133,18 +161,42 @@ class NotificationService {
       var n = 0;
       for (final row in list) {
         final inv = row.invoice;
-        if (inv.status != 'unpaid') continue;
+        if (row.effectiveStatus == 'paid') continue;
         if (!inv.dateIssued.isBefore(cutoff)) continue;
         final sent = inv.reminderSentAt;
         if (sent != null && !sent.isBefore(cutoff)) continue;
-        await showUnpaidReminder(inv);
-        await repo.markReminderSent(inv.id);
-        n++;
+        if (await showUnpaidReminder(inv)) {
+          await repo.markReminderSent(inv.id);
+          n++;
+        }
       }
       return n;
     } catch (e) {
       debugPrint('checkUnpaidInvoices error: $e');
       return 0;
     }
+  }
+
+  Future<void> reconcileAfterRestore(AppDatabase db) async {
+    if (kIsWeb || Platform.isLinux) return;
+    if (!_ready) await init();
+    if (!_ready) return;
+
+    await _plugin.cancelAll();
+    final villas = {
+      for (final villa in await db.select(db.villas).get())
+        villa.id: villa.name,
+    };
+    final bookings = await db.select(db.bookings).get();
+    for (final booking in bookings) {
+      await scheduleCheckIn(
+        bookingId: booking.id,
+        guestName: booking.guestName,
+        villaName: villas[booking.villaId] ?? 'Villa',
+        checkIn: booking.checkIn,
+        status: booking.status,
+      );
+    }
+    await checkUnpaidInvoices(InvoiceRepository(db));
   }
 }

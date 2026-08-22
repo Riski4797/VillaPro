@@ -15,8 +15,10 @@ void main() {
     final d = DateTime(2026, 8, 10);
     expect(dateRangeOverlap(a, b, c, d), true);
     expect(dateRangeOverlap(a, b, b, d), false); // adjacent checkout=checkin OK
-    expect(dateRangeOverlap(a, b, DateTime(2026, 7, 1), DateTime(2026, 7, 31)),
-        false);
+    expect(
+      dateRangeOverlap(a, b, DateTime(2026, 7, 1), DateTime(2026, 7, 31)),
+      false,
+    );
   });
 
   test('nightsBetween', () {
@@ -26,23 +28,39 @@ void main() {
   test('bookingPhase', () {
     final now = DateTime(2026, 8, 10);
     expect(
-      bookingPhase(DateTime(2026, 8, 15), DateTime(2026, 8, 18), 'confirmed',
-          now: now),
+      bookingPhase(
+        DateTime(2026, 8, 15),
+        DateTime(2026, 8, 18),
+        'confirmed',
+        now: now,
+      ),
       BookingPhase.upcoming,
     );
     expect(
-      bookingPhase(DateTime(2026, 8, 8), DateTime(2026, 8, 12), 'confirmed',
-          now: now),
+      bookingPhase(
+        DateTime(2026, 8, 8),
+        DateTime(2026, 8, 12),
+        'confirmed',
+        now: now,
+      ),
       BookingPhase.ongoing,
     );
     expect(
-      bookingPhase(DateTime(2026, 8, 1), DateTime(2026, 8, 5), 'confirmed',
-          now: now),
+      bookingPhase(
+        DateTime(2026, 8, 1),
+        DateTime(2026, 8, 5),
+        'confirmed',
+        now: now,
+      ),
       BookingPhase.done,
     );
     expect(
-      bookingPhase(DateTime(2026, 8, 15), DateTime(2026, 8, 18), 'cancelled',
-          now: now),
+      bookingPhase(
+        DateTime(2026, 8, 15),
+        DateTime(2026, 8, 18),
+        'cancelled',
+        now: now,
+      ),
       BookingPhase.cancelled,
     );
   });

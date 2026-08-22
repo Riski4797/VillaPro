@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../data/database/app_database.dart';
 import '../../data/database/dummy_data_seeder.dart';
 import '../../services/photo_storage_service.dart';
 import '../villa/villa_providers.dart';
@@ -30,11 +33,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _templateDetail = TextEditingController();
   final _templateButler = TextEditingController();
   String _logoPath = '';
+  String _savedLogoPath = '';
   bool _loaded = false;
   bool _saving = false;
 
+  void _loadSettings(AppSetting settings) {
+    _businessName.text = settings.businessName;
+    _tagline.text = settings.tagline;
+    _logoPath = settings.logoPath;
+    _savedLogoPath = settings.logoPath;
+    _adminName.text = settings.adminName;
+    _adminContact.text = settings.adminContact;
+    _bankAccounts.text = settings.bankAccounts;
+    _footerNote.text = settings.invoiceFooterNote;
+    _templateTeaser.text = settings.templateTeaser;
+    _templateDetail.text = settings.templateDetail;
+    _templateButler.text = settings.templateButlerNotification;
+    _loaded = true;
+  }
+
+  Future<void> _discardDraftLogo() async {
+    final path = _logoPath;
+    if (path.isNotEmpty && path != _savedLogoPath) {
+      await PhotoStorageService().deleteFile(path);
+    }
+  }
+
   @override
   void dispose() {
+    unawaited(_discardDraftLogo());
     _businessName.dispose();
     _tagline.dispose();
     _adminName.dispose();
@@ -49,18 +76,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _pickLogo() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked != null) {
-      final savedPath = await PhotoStorageService().importPhoto(picked.path);
-      setState(() => _logoPath = savedPath);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final storage = PhotoStorageService();
+    final savedPath = await storage.importPhoto(picked.path);
+    if (!mounted) {
+      await storage.deleteFile(savedPath);
+      return;
     }
+    if (_logoPath.isNotEmpty && _logoPath != _savedLogoPath) {
+      await storage.deleteFile(_logoPath);
+    }
+    setState(() => _logoPath = savedPath);
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref.read(settingsRepoProvider).updateSettings(
+      await ref
+          .read(settingsRepoProvider)
+          .updateSettings(
             businessName: _businessName.text.trim(),
             tagline: _tagline.text.trim(),
             logoPath: _logoPath,
@@ -72,8 +111,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             templateDetail: _templateDetail.text.trim(),
             templateButlerNotification: _templateButler.text.trim(),
           );
-      ref.invalidate(appSettingsProvider);
+      if (_savedLogoPath.isNotEmpty && _savedLogoPath != _logoPath) {
+        await PhotoStorageService().deleteFile(_savedLogoPath);
+      }
+      _savedLogoPath = _logoPath;
       if (!mounted) return;
+      ref.invalidate(appSettingsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Semua profil, logo & template WA berhasil disimpan'),
@@ -82,9 +125,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -92,7 +135,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   String _renderPreview(String template, {bool isButler = false}) {
-    if (template.isEmpty) return '(Ketik template di atas untuk melihat preview)';
+    if (template.isEmpty)
+      return '(Ketik template di atas untuk melihat preview)';
     if (isButler) {
       return template
           .replaceAll('{nama_penjaga}', 'Bli Kadek')
@@ -106,21 +150,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return template
         .replaceAll('{nama_villa}', 'Villa Asmara Ubud')
         .replaceAll('{lokasi}', 'Ubud, Gianyar, Bali')
-        .replaceAll('{deskripsi}',
-            'Villa bambu eco-luxury 3 kamar dengan infinity pool pemandangan sawah terasering.')
-        .replaceAll('{keunggulan}',
-            '• Infinity Pool Menghadap Lembah\n• 100% Eco Bamboo Architecture\n• Floating Breakfast')
-        .replaceAll('{fasilitas}',
-            '• 3 Kamar Tidur AC\n• Private Pool\n• WiFi Cepat\n• Kitchen Set')
-        .replaceAll('{aturan}',
-            'No indoor smoking, Musik santai maks 22:00, Maks 6 orang.')
+        .replaceAll(
+          '{deskripsi}',
+          'Villa bambu eco-luxury 3 kamar dengan infinity pool pemandangan sawah terasering.',
+        )
+        .replaceAll(
+          '{keunggulan}',
+          '• Infinity Pool Menghadap Lembah\n• 100% Eco Bamboo Architecture\n• Floating Breakfast',
+        )
+        .replaceAll(
+          '{fasilitas}',
+          '• 3 Kamar Tidur AC\n• Private Pool\n• WiFi Cepat\n• Kitchen Set',
+        )
+        .replaceAll(
+          '{aturan}',
+          'No indoor smoking, Musik santai maks 22:00, Maks 6 orang.',
+        )
         .replaceAll('{harga_weekday}', 'Rp 2.800.000')
         .replaceAll('{harga_weekend}', 'Rp 3.200.000')
         .replaceAll('{harga_high_season}', 'Rp 4.500.000')
         .replaceAll(
-            '{nama_admin}', _adminName.text.isNotEmpty ? _adminName.text : 'Admin')
-        .replaceAll('{kontak_admin}',
-            _adminContact.text.isNotEmpty ? _adminContact.text : '08123456789');
+          '{nama_admin}',
+          _adminName.text.isNotEmpty ? _adminName.text : 'Admin',
+        )
+        .replaceAll(
+          '{kontak_admin}',
+          _adminContact.text.isNotEmpty ? _adminContact.text : '08123456789',
+        );
   }
 
   @override
@@ -137,8 +193,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             tabs: [
-              Tab(icon: Icon(Icons.storefront, size: 18), text: 'Profil & Logo'),
-              Tab(icon: Icon(Icons.chat_outlined, size: 18), text: 'Template WA'),
+              Tab(
+                icon: Icon(Icons.storefront, size: 18),
+                text: 'Profil & Logo',
+              ),
+              Tab(
+                icon: Icon(Icons.chat_outlined, size: 18),
+                text: 'Template WA',
+              ),
             ],
           ),
         ),
@@ -147,17 +209,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           error: (e, _) => Center(child: Text('$e')),
           data: (s) {
             if (!_loaded) {
-              _businessName.text = s.businessName;
-              _tagline.text = s.tagline;
-              _logoPath = s.logoPath;
-              _adminName.text = s.adminName;
-              _adminContact.text = s.adminContact;
-              _bankAccounts.text = s.bankAccounts;
-              _footerNote.text = s.invoiceFooterNote;
-              _templateTeaser.text = s.templateTeaser;
-              _templateDetail.text = s.templateDetail;
-              _templateButler.text = s.templateButlerNotification;
-              _loaded = true;
+              _loadSettings(s);
             }
 
             return Form(
@@ -183,18 +235,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(color: AppColors.border),
                                 ),
-                                child: _logoPath.isNotEmpty &&
+                                child:
+                                    _logoPath.isNotEmpty &&
                                         File(_logoPath).existsSync()
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
                                         child: Image.file(
                                           File(_logoPath),
+                                          cacheWidth: 204,
                                           fit: BoxFit.cover,
                                         ),
                                       )
                                     : const Center(
-                                        child: Icon(Icons.image_outlined,
-                                            color: Colors.grey, size: 28),
+                                        child: Icon(
+                                          Icons.image_outlined,
+                                          color: Colors.grey,
+                                          size: 28,
+                                        ),
                                       ),
                               ),
                               const SizedBox(width: 14),
@@ -214,31 +271,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     const Text(
                                       'Tampil otomatis di pojok atas Invoice PDF & Brosur',
                                       style: TextStyle(
-                                          fontSize: 11, color: Colors.grey),
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
                                     ),
                                     const SizedBox(height: 8),
                                     Row(
                                       children: [
                                         FilledButton.tonalIcon(
                                           style: FilledButton.styleFrom(
-                                            visualDensity: VisualDensity.compact,
+                                            visualDensity:
+                                                VisualDensity.compact,
                                             padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
                                           ),
                                           onPressed: _pickLogo,
-                                          icon: const Icon(Icons.upload, size: 14),
-                                          label: Text(_logoPath.isNotEmpty
-                                              ? 'Ganti Logo'
-                                              : 'Pilih Logo'),
+                                          icon: const Icon(
+                                            Icons.upload,
+                                            size: 14,
+                                          ),
+                                          label: Text(
+                                            _logoPath.isNotEmpty
+                                                ? 'Ganti Logo'
+                                                : 'Pilih Logo',
+                                          ),
                                         ),
                                         if (_logoPath.isNotEmpty) ...[
                                           const SizedBox(width: 8),
                                           IconButton(
                                             tooltip: 'Hapus Logo',
-                                            icon: const Icon(Icons.delete_outline,
-                                                color: Colors.red, size: 18),
-                                            onPressed: () =>
-                                                setState(() => _logoPath = ''),
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            onPressed: () async {
+                                              final removed = _logoPath;
+                                              setState(() => _logoPath = '');
+                                              if (removed != _savedLogoPath) {
+                                                await PhotoStorageService()
+                                                    .deleteFile(removed);
+                                              }
+                                            },
                                           ),
                                         ],
                                       ],
@@ -265,8 +341,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           hintText: 'Mis: Bali Tropical Villa Management',
                           prefixIcon: Icon(Icons.business_outlined, size: 20),
                         ),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Wajib diisi'
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -285,7 +362,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               controller: _adminName,
                               decoration: const InputDecoration(
                                 labelText: 'Nama Admin / PIC',
-                                prefixIcon: Icon(Icons.person_outline, size: 20),
+                                prefixIcon: Icon(
+                                  Icons.person_outline,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
@@ -295,7 +375,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               controller: _adminContact,
                               decoration: const InputDecoration(
                                 labelText: 'No. WA Admin',
-                                prefixIcon: Icon(Icons.phone_outlined, size: 20),
+                                prefixIcon: Icon(
+                                  Icons.phone_outlined,
+                                  size: 20,
+                                ),
                               ),
                               keyboardType: TextInputType.phone,
                             ),
@@ -310,8 +393,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 4),
                       Text(
                         'Daftar rekening tujuan transfer DP & Pelunasan',
-                        style:
-                            TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
@@ -343,50 +428,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 24),
                       Card(
                         child: ListTile(
-                          leading: const Icon(Icons.backup_outlined,
-                              color: AppColors.primary),
+                          leading: const Icon(
+                            Icons.backup_outlined,
+                            color: AppColors.primary,
+                          ),
                           title: const Text('Backup Data Offline (ZIP)'),
                           subtitle: const Text(
-                              'Export seluruh data & foto villa ke file ZIP'),
-                          trailing:
-                              const Icon(Icons.arrow_forward_ios, size: 14),
-                          onTap: () => context.push('/settings/export'),
+                            'Export seluruh data & foto villa ke file ZIP',
+                          ),
+                          trailing: const Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                          ),
+                          onTap: () async {
+                            final restored = await context.push<bool>(
+                              '/settings/export',
+                            );
+                            if (restored != true || !mounted) return;
+                            await _discardDraftLogo();
+                            if (!mounted) return;
+                            setState(() => _loaded = false);
+                            ref.invalidate(appSettingsProvider);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Backup berhasil dipulihkan.'),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: 10),
                       Card(
-                        color: AppColors.goldBg,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                              color: AppColors.gold.withValues(alpha: 0.4)),
-                        ),
                         child: ListTile(
-                          leading: const Icon(Icons.auto_awesome,
-                              color: Color(0xFF8D6E63)),
-                          title: const Text(
-                            'Muat Data Contoh / Demo (4 Villa)',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                          leading: const Icon(Icons.description_outlined),
+                          title: const Text('Lisensi Perangkat Lunak'),
                           subtitle: const Text(
-                              'Isi katalog dengan 4 villa lengkap, foto, booking aktif & invoice'),
-                          trailing: const Icon(Icons.download, size: 18),
-                          onTap: () async {
-                            final db = ref.read(databaseProvider);
-                            await DummyDataSeeder.seedIfEmpty(db);
-                            ref.invalidate(villaListProvider);
-                            ref.invalidate(appSettingsProvider);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Data demo berhasil dimuat!'),
-                                  backgroundColor: AppColors.availableGreen,
-                                ),
-                              );
-                            }
-                          },
+                            'Lihat lisensi font dan komponen pihak ketiga',
+                          ),
+                          onTap: () => showLicensePage(
+                            context: context,
+                            applicationName: 'VillaPro',
+                            applicationVersion: '1.0.0',
+                          ),
                         ),
                       ),
+                      if (kDebugMode && Platform.isLinux) ...[
+                        const SizedBox(height: 10),
+                        Card(
+                          color: AppColors.goldBg,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(
+                              color: AppColors.gold.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.auto_awesome,
+                              color: Color(0xFF8D6E63),
+                            ),
+                            title: const Text(
+                              'Muat Data Contoh / Demo (4 Villa)',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: const Text(
+                              'Isi katalog dengan 4 villa lengkap, foto, booking aktif & invoice',
+                            ),
+                            trailing: const Icon(Icons.download, size: 18),
+                            onTap: () async {
+                              final db = ref.read(databaseProvider);
+                              await DummyDataSeeder.seedIfEmpty(db);
+                              ref.invalidate(villaListProvider);
+                              ref.invalidate(appSettingsProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Data demo berhasil dimuat!'),
+                                    backgroundColor: AppColors.availableGreen,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 28),
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
@@ -394,7 +519,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         onPressed: _saving ? null : _save,
                         icon: const Icon(Icons.save),
-                        label: Text(_saving ? 'Menyimpan...' : 'Simpan Profil & Logo'),
+                        label: Text(
+                          _saving ? 'Menyimpan...' : 'Simpan Profil & Logo',
+                        ),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -410,15 +537,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           color: AppColors.goldBg,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: AppColors.gold.withValues(alpha: 0.4)),
+                            color: AppColors.gold.withValues(alpha: 0.4),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Row(
                               children: [
-                                Icon(Icons.auto_awesome,
-                                    color: Color(0xFF8D6E63), size: 18),
+                                Icon(
+                                  Icons.auto_awesome,
+                                  color: Color(0xFF8D6E63),
+                                  size: 18,
+                                ),
                                 SizedBox(width: 8),
                                 Text(
                                   'Tag Variabel Otomatis:',
@@ -449,8 +580,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Text(
                         '1. Template Teaser Singkat',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -474,8 +605,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Text(
                         '2. Template Detail Lengkap',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
@@ -499,20 +630,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Text(
                         '3. Template Notifikasi Check-in ke Penjaga Villa',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Variabel: {nama_penjaga} {nama_villa} {nama_tamu} {kontak_tamu} {tgl_checkin} {tgl_checkout} {jumlah_malam}',
                         style: TextStyle(
-                            fontSize: 11, color: Colors.grey.shade600),
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _templateButler,
                         decoration: const InputDecoration(
-                          hintText: 'Format notifikasi persiapan tamu ke butler…',
+                          hintText:
+                              'Format notifikasi persiapan tamu ke butler…',
                           alignLabelWithHint: true,
                         ),
                         maxLines: 5,
@@ -521,8 +655,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const SizedBox(height: 6),
                       _LivePreviewBox(
                         title: 'Live Preview (Pesan ke Penjaga):',
-                        renderedText: _renderPreview(_templateButler.text,
-                            isButler: true),
+                        renderedText: _renderPreview(
+                          _templateButler.text,
+                          isButler: true,
+                        ),
                       ),
 
                       const SizedBox(height: 28),
@@ -532,9 +668,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         onPressed: _saving ? null : _save,
                         icon: const Icon(Icons.save),
-                        label: Text(_saving
-                            ? 'Menyimpan...'
-                            : 'Simpan Template WhatsApp'),
+                        label: Text(
+                          _saving ? 'Menyimpan...' : 'Simpan Template WhatsApp',
+                        ),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -550,10 +686,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 }
 
 class _LivePreviewBox extends StatelessWidget {
-  const _LivePreviewBox({
-    required this.title,
-    required this.renderedText,
-  });
+  const _LivePreviewBox({required this.title, required this.renderedText});
 
   final String title;
   final String renderedText;

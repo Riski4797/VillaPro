@@ -25,7 +25,11 @@ class DashboardScreen extends ConsumerWidget {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.villa, color: AppColors.primary, size: 20),
+              child: const Icon(
+                Icons.villa,
+                color: AppColors.primary,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 10),
             const Text('Villa Pro Manager'),
@@ -50,8 +54,9 @@ class DashboardScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (d) => RefreshIndicator(
           onRefresh: () async {
-            await NotificationService.instance
-                .checkUnpaidInvoices(ref.read(invoiceRepoProvider));
+            await NotificationService.instance.checkUnpaidInvoices(
+              ref.read(invoiceRepoProvider),
+            );
             ref.invalidate(dashboardProvider);
             ref.invalidate(overdueUnpaidCountProvider);
           },
@@ -92,7 +97,9 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(20),
@@ -207,8 +214,11 @@ class DashboardScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_ios,
-                            size: 14, color: Colors.grey),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: Colors.grey,
+                        ),
                       ],
                     ),
                   ),
@@ -264,7 +274,9 @@ class DashboardScreen extends ConsumerWidget {
                   if (d.upcomingCheckIns.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
@@ -289,8 +301,11 @@ class DashboardScreen extends ConsumerWidget {
                     child: Center(
                       child: Column(
                         children: [
-                          Icon(Icons.event_available_outlined,
-                              size: 40, color: Colors.grey.shade400),
+                          Icon(
+                            Icons.event_available_outlined,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Tidak ada jadwal check-in minggu ini',
@@ -310,12 +325,18 @@ class DashboardScreen extends ConsumerWidget {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 4),
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       leading: CircleAvatar(
-                        backgroundColor:
-                            AppColors.primary.withValues(alpha: 0.1),
-                        child: const Icon(Icons.person,
-                            color: AppColors.primary, size: 20),
+                        backgroundColor: AppColors.primary.withValues(
+                          alpha: 0.1,
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: AppColors.primary,
+                          size: 20,
+                        ),
                       ),
                       title: Text(
                         c.guestName,
@@ -324,7 +345,9 @@ class DashboardScreen extends ConsumerWidget {
                       subtitle: Text('Villa: ${c.villaName}'),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.availableBg,
                           borderRadius: BorderRadius.circular(6),

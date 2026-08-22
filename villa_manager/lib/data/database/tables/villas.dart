@@ -21,6 +21,7 @@ class Villas extends Table {
   IntColumn get priceWeekend => integer().withDefault(const Constant(0))();
   IntColumn get priceHighSeason => integer().withDefault(const Constant(0))();
   RealColumn get commissionPercent => real().withDefault(const Constant(0.0))();
+
   /// `percent` | `fixed`
   TextColumn get commissionType =>
       text().withDefault(const Constant('percent'))();
@@ -31,4 +32,14 @@ class Villas extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => [
+    'CHECK (price_weekday >= 0)',
+    'CHECK (price_weekend >= 0)',
+    'CHECK (price_high_season >= 0)',
+    'CHECK (commission_percent >= 0 AND commission_percent <= 100)',
+    "CHECK (commission_type IN ('percent', 'fixed'))",
+    'CHECK (commission_fixed >= 0)',
+  ];
 }

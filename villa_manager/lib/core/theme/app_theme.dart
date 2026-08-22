@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   // Primary (Deep Velvet Rainforest)
@@ -34,10 +33,13 @@ class AppColors {
 }
 
 ThemeData appTheme() {
-  final baseTextTheme = GoogleFonts.plusJakartaSansTextTheme();
+  final baseTextTheme = ThemeData.light().textTheme.apply(
+    fontFamily: 'PlusJakartaSans',
+  );
 
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'PlusJakartaSans',
     scaffoldBackgroundColor: AppColors.background,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
@@ -75,9 +77,7 @@ ThemeData appTheme() {
       bodyMedium: baseTextTheme.bodyMedium?.copyWith(
         color: AppColors.textSecondary,
       ),
-      bodySmall: baseTextTheme.bodySmall?.copyWith(
-        color: AppColors.textMuted,
-      ),
+      bodySmall: baseTextTheme.bodySmall?.copyWith(color: AppColors.textMuted),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.background,
@@ -85,7 +85,8 @@ ThemeData appTheme() {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.plusJakartaSans(
+      titleTextStyle: const TextStyle(
+        fontFamily: 'PlusJakartaSans',
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
@@ -106,10 +107,9 @@ ThemeData appTheme() {
         foregroundColor: AppColors.surfaceElevated,
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        textStyle: GoogleFonts.plusJakartaSans(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(
+          fontFamily: 'PlusJakartaSans',
           fontWeight: FontWeight.bold,
           fontSize: 14,
         ),
@@ -120,10 +120,9 @@ ThemeData appTheme() {
         foregroundColor: AppColors.primary,
         side: const BorderSide(color: AppColors.primary, width: 1.2),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        textStyle: GoogleFonts.plusJakartaSans(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(
+          fontFamily: 'PlusJakartaSans',
           fontWeight: FontWeight.w600,
           fontSize: 13,
         ),
@@ -136,7 +135,8 @@ ThemeData appTheme() {
         borderRadius: BorderRadius.circular(10),
         side: const BorderSide(color: AppColors.border),
       ),
-      labelStyle: GoogleFonts.plusJakartaSans(
+      labelStyle: const TextStyle(
+        fontFamily: 'PlusJakartaSans',
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
@@ -158,7 +158,8 @@ ThemeData appTheme() {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
       ),
-      labelStyle: GoogleFonts.plusJakartaSans(
+      labelStyle: const TextStyle(
+        fontFamily: 'PlusJakartaSans',
         color: AppColors.textSecondary,
         fontSize: 13,
       ),

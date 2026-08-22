@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
@@ -43,17 +44,27 @@ class VillaDetailScreen extends ConsumerWidget {
                   tooltip: 'Cetak Brosur PDF',
                   icon: const Icon(Icons.picture_as_pdf_outlined),
                   onPressed: () async {
-                    final photos = await ref
-                        .read(villaRepoProvider)
-                        .watchPhotos(villaId)
-                        .first;
-                    final settings =
-                        ref.read(appSettingsProvider).valueOrNull;
-                    BrochureService().exportSingleVillaBrochure(
-                      villa: v,
-                      photos: photos,
-                      settings: settings,
-                    );
+                    try {
+                      final repo = ref.read(villaRepoProvider);
+                      final photos = await repo.watchPhotos(villaId).first;
+                      if (!context.mounted) return;
+                      final settings = ref
+                          .read(appSettingsProvider)
+                          .valueOrNull;
+                      await BrochureService().exportSingleVillaBrochure(
+                        villa: v,
+                        photos: photos,
+                        settings: settings,
+                      );
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Gagal membuat brosur: $error'),
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
                 IconButton(
@@ -76,12 +87,14 @@ class VillaDetailScreen extends ConsumerWidget {
                 tabs: [
                   Tab(icon: Icon(Icons.info_outline, size: 18), text: 'Info'),
                   Tab(
-                      icon: Icon(Icons.photo_library_outlined, size: 18),
-                      text: 'Foto & Video'),
+                    icon: Icon(Icons.photo_library_outlined, size: 18),
+                    text: 'Foto & Video',
+                  ),
                   Tab(icon: Icon(Icons.help_outline, size: 18), text: 'FAQ'),
                   Tab(
-                      icon: Icon(Icons.lock_outline, size: 18),
-                      text: 'Catatan Owner'),
+                    icon: Icon(Icons.lock_outline, size: 18),
+                    text: 'Catatan Owner',
+                  ),
                 ],
               ),
             ),
@@ -106,7 +119,7 @@ class VillaDetailScreen extends ConsumerWidget {
                   ),
                   onPressed: () => showShareToCustomerSheet(context, villa: v),
                   icon: const Icon(Icons.share),
-                  label: const Text('Bagikan ke Customer (WA)'),
+                  label: const Text('Bagikan ke Pelanggan'),
                 ),
               ),
             ),
@@ -117,26 +130,45 @@ class VillaDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, Villa v) async {
+    BuildContext context,
+    WidgetRef ref,
+    Villa v,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Hapus villa?'),
-        content: Text('Semua data dan foto ${v.name} akan dihapus.'),
+        content: Text(
+          '${v.name}, foto, dan FAQ akan dihapus. Villa dengan riwayat booking tidak dapat dihapus.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Hapus')),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
         ],
       ),
     );
     if (ok == true) {
-      await ref.read(villaRepoProvider).delete(villaId);
-      if (context.mounted) context.go('/villas');
+      try {
+        await ref.read(villaRepoProvider).delete(villaId);
+        if (context.mounted) context.go('/villas');
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Villa memiliki riwayat booking dan tidak dapat dihapus.',
+              ),
+            ),
+          );
+        }
+      }
     }
   }
 }
@@ -187,8 +219,10 @@ class _InfoTab extends ConsumerWidget {
               children: [
                 Icon(Icons.pause_circle_outline, color: Colors.grey),
                 SizedBox(width: 10),
-                Text('Status: Nonaktif (disembunyikan dari katalog)',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  'Status: Nonaktif (disembunyikan dari katalog)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
@@ -247,8 +281,10 @@ class _InfoTab extends ConsumerWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle_outline,
-                        color: AppColors.availableGreen),
+                    const Icon(
+                      Icons.check_circle_outline,
+                      color: AppColors.availableGreen,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -287,15 +323,16 @@ class _InfoTab extends ConsumerWidget {
         if (villa.location.isNotEmpty)
           Row(
             children: [
-              const Icon(Icons.location_on,
-                  size: 16, color: AppColors.primary),
+              const Icon(Icons.location_on, size: 16, color: AppColors.primary),
               const SizedBox(width: 6),
-              Text(
-                villa.location,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+              Expanded(
+                child: Text(
+                  villa.location,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -329,16 +366,19 @@ class _InfoTab extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _PriceRow(
-                    label: 'Hari Kerja (Weekday)',
-                    amount: villa.priceWeekday),
+                  label: 'Hari Kerja (Weekday)',
+                  amount: villa.priceWeekday,
+                ),
                 const Divider(height: 16),
                 _PriceRow(
-                    label: 'Akhir Pekan (Weekend)',
-                    amount: villa.priceWeekend),
+                  label: 'Akhir Pekan (Weekend)',
+                  amount: villa.priceWeekend,
+                ),
                 const Divider(height: 16),
                 _PriceRow(
-                    label: 'Musim Liburan (High Season)',
-                    amount: villa.priceHighSeason),
+                  label: 'Musim Liburan (High Season)',
+                  amount: villa.priceHighSeason,
+                ),
               ],
             ),
           ),
@@ -356,16 +396,20 @@ class _InfoTab extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...usps.map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('✨ ', style: TextStyle(fontSize: 13)),
-                    Expanded(child: Text(e, style: const TextStyle(fontSize: 13))),
-                  ],
-                ),
-              )),
+          ...usps.map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('✨ ', style: TextStyle(fontSize: 13)),
+                  Expanded(
+                    child: Text(e, style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
 
         // Fasilitas (Amenities)
@@ -384,12 +428,17 @@ class _InfoTab extends ConsumerWidget {
             spacing: 8,
             runSpacing: 8,
             children: amenities
-                .map((a) => Chip(
-                      backgroundColor: AppColors.surface,
-                      avatar: const Icon(Icons.check,
-                          size: 14, color: AppColors.primary),
-                      label: Text(a, style: const TextStyle(fontSize: 12)),
-                    ))
+                .map(
+                  (a) => Chip(
+                    backgroundColor: AppColors.surface,
+                    avatar: const Icon(
+                      Icons.check,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    label: Text(a, style: const TextStyle(fontSize: 12)),
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -500,32 +549,40 @@ class _PhotosTab extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8,
               children: [
                 Text(
                   '${list.length} Media Tersimpan',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
-                Row(
+                Wrap(
+                  spacing: 8,
                   children: [
                     FilledButton.tonalIcon(
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                       ),
                       onPressed: () => _addPhotos(ref),
                       icon: const Icon(Icons.add_photo_alternate, size: 16),
                       label: const Text('+ Foto'),
                     ),
-                    const SizedBox(width: 8),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                       ),
                       onPressed: () => _addVideo(context, ref),
                       icon: const Icon(Icons.video_library_outlined, size: 16),
@@ -542,8 +599,11 @@ class _PhotosTab extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.perm_media_outlined,
-                            size: 48, color: Colors.grey),
+                        Icon(
+                          Icons.perm_media_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 8),
                         Text('Belum ada foto atau video villa'),
                       ],
@@ -553,10 +613,10 @@ class _PhotosTab extends ConsumerWidget {
                     padding: const EdgeInsets.all(12),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
                     itemCount: list.length,
                     itemBuilder: (_, i) {
                       final ph = list[i];
@@ -577,7 +637,9 @@ class _PhotosTab extends ConsumerWidget {
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: AppColors.gold.withValues(alpha: 0.2),
+                                          color: AppColors.gold.withValues(
+                                            alpha: 0.2,
+                                          ),
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(
@@ -606,6 +668,20 @@ class _PhotosTab extends ConsumerWidget {
                                 errorBuilder: (_, __, ___) =>
                                     const ColoredBox(color: Colors.grey),
                               ),
+                            if (isVideo)
+                              Positioned.fill(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => showDialog<void>(
+                                      context: context,
+                                      builder: (_) => _VideoPreviewDialog(
+                                        path: ph.filePath,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             Positioned(
                               top: 4,
                               right: 4,
@@ -619,8 +695,11 @@ class _PhotosTab extends ConsumerWidget {
                                       .deletePhoto(ph),
                                   child: const Padding(
                                     padding: EdgeInsets.all(4),
-                                    child: Icon(Icons.close,
-                                        size: 16, color: Colors.white),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -632,7 +711,9 @@ class _PhotosTab extends ConsumerWidget {
                                 right: 4,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 2),
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.black54,
                                     borderRadius: BorderRadius.circular(4),
@@ -659,12 +740,109 @@ class _PhotosTab extends ConsumerWidget {
   }
 }
 
+class _VideoPreviewDialog extends StatefulWidget {
+  const _VideoPreviewDialog({required this.path});
+
+  final String path;
+
+  @override
+  State<_VideoPreviewDialog> createState() => _VideoPreviewDialogState();
+}
+
+class _VideoPreviewDialogState extends State<_VideoPreviewDialog> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initialized;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.file(File(widget.path));
+    _initialized = _controller.initialize().then((_) {
+      _controller.setLooping(true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Video Tour'),
+      content: SizedBox(
+        width: 640,
+        child: FutureBuilder<void>(
+          future: _initialized,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Text(
+                'Preview video tersedia pada aplikasi Android.',
+              );
+            }
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(
+                height: 180,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: _controller,
+              builder: (context, value, _) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => value.isPlaying
+                        ? _controller.pause()
+                        : _controller.play(),
+                    child: AspectRatio(
+                      aspectRatio: value.aspectRatio,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          VideoPlayer(_controller),
+                          if (!value.isPlaying)
+                            const Icon(
+                              Icons.play_circle_fill,
+                              size: 64,
+                              color: Colors.white70,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  VideoProgressIndicator(
+                    _controller,
+                    allowScrubbing: true,
+                    padding: const EdgeInsets.only(top: 10),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Tutup'),
+        ),
+      ],
+    );
+  }
+}
+
 class _FaqsTab extends ConsumerWidget {
   const _FaqsTab({required this.villaId});
   final String villaId;
 
-  Future<void> _edit(BuildContext context, WidgetRef ref,
-      [VillaFaq? faq]) async {
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref, [
+    VillaFaq? faq,
+  ]) async {
     final qCtrl = TextEditingController(text: faq?.question ?? '');
     final aCtrl = TextEditingController(text: faq?.answer ?? '');
     final ok = await showDialog<bool>(
@@ -688,16 +866,20 @@ class _FaqsTab extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Simpan')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Simpan'),
+          ),
         ],
       ),
     );
     if (ok == true && qCtrl.text.trim().isNotEmpty) {
-      await ref.read(villaRepoProvider).upsertFaq(
+      await ref
+          .read(villaRepoProvider)
+          .upsertFaq(
             id: faq?.id,
             villaId: villaId,
             question: qCtrl.text.trim(),
@@ -724,7 +906,9 @@ class _FaqsTab extends ConsumerWidget {
                 Text(
                   '${list.length} FAQ Tersedia',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 13),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
                 FilledButton.icon(
                   onPressed: () => _edit(context, ref),
@@ -740,8 +924,11 @@ class _FaqsTab extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.question_answer_outlined,
-                            size: 48, color: Colors.grey),
+                        Icon(
+                          Icons.question_answer_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 8),
                         Text('Belum ada tanya jawab'),
                       ],
@@ -773,12 +960,13 @@ class _FaqsTab extends ConsumerWidget {
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.edit, size: 16),
-                                    onPressed: () =>
-                                        _edit(context, ref, f),
+                                    onPressed: () => _edit(context, ref, f),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        size: 16),
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 16,
+                                    ),
                                     onPressed: () => ref
                                         .read(villaRepoProvider)
                                         .deleteFaq(f.id),
@@ -786,8 +974,10 @@ class _FaqsTab extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              Text('A: ${f.answer}',
-                                  style: const TextStyle(fontSize: 13)),
+                              Text(
+                                'A: ${f.answer}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
                             ],
                           ),
                         ),
@@ -851,15 +1041,18 @@ class _PrivateTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.account_balance_outlined,
-                        color: AppColors.primary, size: 20),
+                    const Icon(
+                      Icons.account_balance_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Pemilik Villa (Owner) & Setoran',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -868,15 +1061,17 @@ class _PrivateTab extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.person_outline),
                   title: const Text('Nama Owner'),
-                  subtitle:
-                      Text(villa.ownerName.isEmpty ? '—' : villa.ownerName),
+                  subtitle: Text(
+                    villa.ownerName.isEmpty ? '—' : villa.ownerName,
+                  ),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.phone_outlined),
                   title: const Text('Kontak / WhatsApp Owner'),
                   subtitle: Text(
-                      villa.ownerContact.isEmpty ? '—' : villa.ownerContact),
+                    villa.ownerContact.isEmpty ? '—' : villa.ownerContact,
+                  ),
                 ),
                 if (villa.ownerBank.isNotEmpty) ...[
                   ListTile(
@@ -908,15 +1103,18 @@ class _PrivateTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.key_outlined,
-                        color: AppColors.primary, size: 20),
+                    const Icon(
+                      Icons.key_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Penjaga Villa / Butler (Di Lokasi)',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -930,8 +1128,11 @@ class _PrivateTab extends StatelessWidget {
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.check_circle_outline,
-                            size: 18, color: AppColors.primary),
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -948,15 +1149,16 @@ class _PrivateTab extends StatelessWidget {
                     leading: const Icon(Icons.badge_outlined),
                     title: const Text('Nama Penjaga'),
                     subtitle: Text(
-                        villa.butlerName.isEmpty ? '—' : villa.butlerName),
+                      villa.butlerName.isEmpty ? '—' : villa.butlerName,
+                    ),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.phone_android_outlined),
                     title: const Text('Kontak / WhatsApp Penjaga'),
-                    subtitle: Text(villa.butlerContact.isEmpty
-                        ? '—'
-                        : villa.butlerContact),
+                    subtitle: Text(
+                      villa.butlerContact.isEmpty ? '—' : villa.butlerContact,
+                    ),
                   ),
                 ],
               ],
@@ -975,15 +1177,18 @@ class _PrivateTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.monetization_on_outlined,
-                        color: AppColors.primary, size: 20),
+                    const Icon(
+                      Icons.monetization_on_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'Kesepakatan Komisi Marketer',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -1006,11 +1211,15 @@ class _PrivateTab extends StatelessWidget {
                 ),
                 if (villa.privateNotes.isNotEmpty) ...[
                   const Divider(height: 16),
-                  const Text('Catatan Tambahan:',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Catatan Tambahan:',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 4),
-                  Text(villa.privateNotes,
-                      style: const TextStyle(fontSize: 13, height: 1.4)),
+                  Text(
+                    villa.privateNotes,
+                    style: const TextStyle(fontSize: 13, height: 1.4),
+                  ),
                 ],
               ],
             ),

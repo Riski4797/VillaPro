@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:flutter/services.dart';
 
 import '../core/utils/booking_utils.dart';
 import '../core/utils/formatters.dart';
@@ -11,8 +11,10 @@ import '../data/database/app_database.dart';
 import '../data/repositories/invoice_repository.dart';
 
 class PdfService {
-  Future<void> exportInvoice(InvoiceDetail detail,
-      [AppSetting? settings]) async {
+  Future<void> exportInvoice(
+    InvoiceDetail detail, [
+    AppSetting? settings,
+  ]) async {
     final bytes = await buildBytes(detail, settings);
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
@@ -20,9 +22,10 @@ class PdfService {
     );
   }
 
-  Future<Uint8List> buildBytes(InvoiceDetail detail,
-          [AppSetting? settings]) =>
-      _build(detail, settings).save();
+  Future<Uint8List> buildBytes(
+    InvoiceDetail detail, [
+    AppSetting? settings,
+  ]) async => (await _build(detail, settings)).save();
 
   String _clean(String s) {
     return s
@@ -38,11 +41,27 @@ class PdfService {
         .replaceAll('←', '<-');
   }
 
-  pw.Document _build(InvoiceDetail detail, [AppSetting? settings]) {
+  Future<pw.Document> _build(
+    InvoiceDetail detail, [
+    AppSetting? settings,
+  ]) async {
     final inv = detail.invoice;
     final nights = nightsBetween(inv.checkIn, inv.checkOut);
     final status = detail.effectiveStatus; // 'paid', 'partial', 'unpaid'
-    final doc = pw.Document();
+    final font = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PlusJakartaSans.ttf'),
+    );
+    final italic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/PlusJakartaSans-Italic.ttf'),
+    );
+    final doc = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: font,
+        bold: font,
+        italic: italic,
+        boldItalic: italic,
+      ),
+    );
 
     final businessName = (settings?.businessName.isNotEmpty ?? false)
         ? settings!.businessName.toUpperCase()
@@ -52,7 +71,7 @@ class PdfService {
         : 'GUEST FOLIO & OFFICIAL INVOICE';
     final bankInfo = (settings?.bankAccounts.isNotEmpty ?? false)
         ? settings!.bankAccounts.replaceAll('•', '-')
-        : '- BCA: 123-456-7890 a.n. Villa Manager\n- Mandiri: 987-654-3210 a.n. Villa Manager';
+        : 'Rekening pembayaran belum dikonfigurasi.';
     final footerNote = (settings?.invoiceFooterNote.isNotEmpty ?? false)
         ? settings!.invoiceFooterNote
         : 'Harap simpan bukti pembayaran dan tunjukkan saat proses check-in.';
@@ -74,23 +93,23 @@ class PdfService {
 
     final (stampBg, stampBorder, stampText, stampLabel) = switch (status) {
       'paid' => (
-          const PdfColor.fromInt(0xFFE8F5E9),
-          const PdfColor.fromInt(0xFF2E7D32),
-          const PdfColor.fromInt(0xFF1B5E20),
-          'LUNAS / FULLY PAID'
-        ),
+        const PdfColor.fromInt(0xFFE8F5E9),
+        const PdfColor.fromInt(0xFF2E7D32),
+        const PdfColor.fromInt(0xFF1B5E20),
+        'LUNAS / FULLY PAID',
+      ),
       'partial' => (
-          const PdfColor.fromInt(0xFFFFF8E1),
-          const PdfColor.fromInt(0xFFF57F17),
-          const PdfColor.fromInt(0xFFE65100),
-          'DP DITERIMA / PARTIALLY PAID'
-        ),
+        const PdfColor.fromInt(0xFFFFF8E1),
+        const PdfColor.fromInt(0xFFF57F17),
+        const PdfColor.fromInt(0xFFE65100),
+        'DP DITERIMA / PARTIALLY PAID',
+      ),
       _ => (
-          const PdfColor.fromInt(0xFFFFEBEE),
-          const PdfColor.fromInt(0xFFC62828),
-          const PdfColor.fromInt(0xFFB71C1C),
-          'BELUM LUNAS / UNPAID'
-        ),
+        const PdfColor.fromInt(0xFFFFEBEE),
+        const PdfColor.fromInt(0xFFC62828),
+        const PdfColor.fromInt(0xFFB71C1C),
+        'BELUM LUNAS / UNPAID',
+      ),
     };
 
     doc.addPage(
@@ -203,8 +222,10 @@ class PdfService {
                         ),
                       ),
                       pw.SizedBox(height: 2),
-                      pw.Text('Villa: ${_clean(inv.villaName)}',
-                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                        'Villa: ${_clean(inv.villaName)}',
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
                     ],
                   ),
                 ),
@@ -235,8 +256,10 @@ class PdfService {
                         ),
                       ),
                       pw.SizedBox(height: 2),
-                      pw.Text('Durasi: $nights Malam',
-                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                        'Durasi: $nights Malam',
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
                     ],
                   ),
                 ),
@@ -259,12 +282,14 @@ class PdfService {
           pw.TableHelper.fromTextArray(
             headers: ['Deskripsi Layanan', 'Qty', 'Harga Satuan', 'Subtotal'],
             data: detail.items
-                .map((i) => [
-                      _clean(i.description),
-                      '${i.qty}',
-                      formatCurrency(i.price),
-                      formatCurrency(i.qty * i.price),
-                    ])
+                .map(
+                  (i) => [
+                    _clean(i.description),
+                    '${i.qty}',
+                    formatCurrency(i.price),
+                    formatCurrency(i.qty * i.price),
+                  ],
+                )
                 .toList(),
             headerStyle: const pw.TextStyle(
               fontSize: 9,
@@ -272,10 +297,14 @@ class PdfService {
               color: PdfColors.white,
             ),
             headerDecoration: const pw.BoxDecoration(color: primaryColor),
-            headerPadding:
-                const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            cellPadding:
-                const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            headerPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 6,
+            ),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 6,
+            ),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellAlignments: {
               0: pw.Alignment.centerLeft,
@@ -301,24 +330,31 @@ class PdfService {
             pw.TableHelper.fromTextArray(
               headers: ['Tanggal', 'Metode', 'Keterangan', 'Jumlah Dibayar'],
               data: detail.payments
-                  .map((p) => [
-                        formatDate(p.datePaid),
-                        _clean(p.paymentMethod),
-                        p.notes.isEmpty ? '-' : _clean(p.notes),
-                        formatCurrency(p.amount),
-                      ])
+                  .map(
+                    (p) => [
+                      formatDate(p.datePaid),
+                      _clean(p.paymentMethod),
+                      p.notes.isEmpty ? '-' : _clean(p.notes),
+                      formatCurrency(p.amount),
+                    ],
+                  )
                   .toList(),
               headerStyle: const pw.TextStyle(
                 fontSize: 9,
                 fontWeight: pw.FontWeight.bold,
                 color: darkText,
               ),
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey200),
-              headerPadding:
-                  const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              cellPadding:
-                  const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey200,
+              ),
+              headerPadding: const pw.EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 5,
+              ),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 5,
+              ),
               cellStyle: const pw.TextStyle(fontSize: 9),
               cellAlignments: {
                 0: pw.Alignment.centerLeft,
@@ -337,8 +373,10 @@ class PdfService {
             children: [
               // Stamp & Status Badge
               pw.Container(
-                padding:
-                    const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: pw.BoxDecoration(
                   color: stampBg,
                   borderRadius: pw.BorderRadius.circular(6),
@@ -381,38 +419,54 @@ class PdfService {
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Total Tagihan:',
-                            style: const pw.TextStyle(fontSize: 10)),
-                        pw.Text(formatCurrency(detail.total),
-                            style: pw.TextStyle(
-                                fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Total Tagihan:',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
+                        pw.Text(
+                          formatCurrency(detail.total),
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                     pw.SizedBox(height: 4),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('Sudah Dibayar (DP):',
-                            style: const pw.TextStyle(
-                                fontSize: 10, color: PdfColors.green800)),
-                        pw.Text(formatCurrency(detail.paidAmount),
-                            style: pw.TextStyle(
-                                fontSize: 10,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColors.green800)),
+                        pw.Text(
+                          'Sudah Dibayar (DP):',
+                          style: const pw.TextStyle(
+                            fontSize: 10,
+                            color: PdfColors.green800,
+                          ),
+                        ),
+                        pw.Text(
+                          formatCurrency(detail.paidAmount),
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.green800,
+                          ),
+                        ),
                       ],
                     ),
                     pw.Divider(color: PdfColors.grey400, height: 10),
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('SISA TAGIHAN:',
-                            style: pw.TextStyle(
-                                fontSize: 11,
-                                fontWeight: pw.FontWeight.bold,
-                                color: detail.remainingBalance > 0
-                                    ? PdfColors.red800
-                                    : primaryColor)),
+                        pw.Text(
+                          'SISA TAGIHAN:',
+                          style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: detail.remainingBalance > 0
+                                ? PdfColors.red800
+                                : primaryColor,
+                          ),
+                        ),
                         pw.Text(
                           formatCurrency(detail.remainingBalance),
                           style: pw.TextStyle(

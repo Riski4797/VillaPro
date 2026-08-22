@@ -1,3 +1,5 @@
+import com.android.build.gradle.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -14,6 +16,15 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+
+    if (project.name == "flutter_local_notifications") {
+        pluginManager.withPlugin("com.android.library") {
+            extensions.configure<LibraryExtension> {
+                // VillaPro checks notification permission before every plugin call.
+                lintOptions.disable("MissingPermission")
+            }
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

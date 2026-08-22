@@ -46,10 +46,23 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
   @override
   void dispose() {
     for (final c in [
-      _name, _location, _ownerName, _ownerContact, _ownerBank,
-      _butlerName, _butlerContact, _description, _usps,
-      _amenities, _houseRules, _priceWeekday, _priceWeekend, _priceHighSeason,
-      _commissionPct, _commissionFixed, _privateNotes,
+      _name,
+      _location,
+      _ownerName,
+      _ownerContact,
+      _ownerBank,
+      _butlerName,
+      _butlerContact,
+      _description,
+      _usps,
+      _amenities,
+      _houseRules,
+      _priceWeekday,
+      _priceWeekend,
+      _priceHighSeason,
+      _commissionPct,
+      _commissionFixed,
+      _privateNotes,
     ]) {
       c.dispose();
     }
@@ -73,7 +86,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
     _priceWeekend.text = formatCurrencyInput(v.priceWeekend);
     _priceHighSeason.text = formatCurrencyInput(v.priceHighSeason);
     _commissionType = v.commissionType;
-    _commissionPct.text = v.commissionPercent == v.commissionPercent.roundToDouble()
+    _commissionPct.text =
+        v.commissionPercent == v.commissionPercent.roundToDouble()
         ? '${v.commissionPercent.toInt()}'
         : '${v.commissionPercent}';
     _commissionFixed.text = formatCurrencyInput(v.commissionFixed);
@@ -82,8 +96,10 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
   }
 
   Future<void> _copyFromOther() async {
-    final list =
-        await ref.read(villaRepoProvider).watchAll(activeOnly: false).first;
+    final list = await ref
+        .read(villaRepoProvider)
+        .watchAll(activeOnly: false)
+        .first;
     if (!mounted || list.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -97,21 +113,20 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
       builder: (ctx) => SimpleDialog(
         title: const Text('Salin dari villa lain'),
         children: list
-            .map((v) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(ctx, v),
-                  child: Text(v.name),
-                ))
+            .map(
+              (v) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, v),
+                child: Text(v.name),
+              ),
+            )
             .toList(),
       ),
     );
     if (picked != null) setState(() => _fillFrom(picked, keepName: false));
   }
 
-  List<String> _lines(String raw) => raw
-      .split('\n')
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
-      .toList();
+  List<String> _lines(String raw) =>
+      raw.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -124,7 +139,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
           ? _ownerContact.text.trim()
           : _butlerContact.text.trim();
 
-      final id = await ref.read(villaRepoProvider).upsert(
+      final id = await ref
+          .read(villaRepoProvider)
+          .upsert(
             id: widget.villaId,
             name: _name.text.trim(),
             location: _location.text.trim(),
@@ -142,9 +159,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             priceWeekday: parseCurrency(_priceWeekday.text),
             priceWeekend: parseCurrency(_priceWeekend.text),
             priceHighSeason: parseCurrency(_priceHighSeason.text),
-            commissionPercent: double.tryParse(
-                    _commissionPct.text.replaceAll(',', '.')) ??
-                0,
+            commissionPercent:
+                double.tryParse(_commissionPct.text.replaceAll(',', '.')) ?? 0,
             commissionType: _commissionType,
             commissionFixed: parseCurrency(_commissionFixed.text),
             privateNotes: _privateNotes.text.trim(),
@@ -155,9 +171,11 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isEdit
-              ? 'Perubahan villa berhasil disimpan'
-              : 'Villa baru berhasil ditambahkan'),
+          content: Text(
+            _isEdit
+                ? 'Perubahan villa berhasil disimpan'
+                : 'Villa baru berhasil ditambahkan',
+          ),
           backgroundColor: Colors.green,
         ),
       );
@@ -168,9 +186,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal simpan: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal simpan: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -188,7 +206,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
         data: (v) {
           if (v == null) {
             return const Scaffold(
-                body: Center(child: Text('Villa tidak ditemukan')));
+              body: Center(child: Text('Villa tidak ditemukan')),
+            );
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!_loaded) {
@@ -197,7 +216,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             }
           });
           return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+            body: Center(child: CircularProgressIndicator()),
+          );
         },
       );
     }
@@ -232,8 +252,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
                 hintText: 'Mis: Villa Sunset Ubud',
                 prefixIcon: Icon(Icons.villa_outlined, size: 20),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Nama villa wajib diisi' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Nama villa wajib diisi'
+                  : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -249,7 +270,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
               controller: _description,
               decoration: const InputDecoration(
                 labelText: 'Deskripsi Villa',
-                hintText: 'Deskripsi suasana, jumlah kamar, dan daya tarik villa…',
+                hintText:
+                    'Deskripsi suasana, jumlah kamar, dan daya tarik villa…',
                 alignLabelWithHint: true,
               ),
               maxLines: 3,
@@ -259,7 +281,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
               controller: _usps,
               decoration: const InputDecoration(
                 labelText: 'Keunggulan / USP (1 per baris)',
-                hintText: 'Private Infinity Pool\nView Sawah Hijau\nDekat Pantai',
+                hintText:
+                    'Private Infinity Pool\nView Sawah Hijau\nDekat Pantai',
                 alignLabelWithHint: true,
               ),
               maxLines: 3,
@@ -306,7 +329,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Status Aktif (Tampil di Katalog)'),
-              subtitle: const Text('Nonaktifkan jika villa sedang renovasi / jeda sewa'),
+              subtitle: const Text(
+                'Nonaktifkan jika villa sedang renovasi / jeda sewa',
+              ),
               value: _isActive,
               onChanged: (v) => setState(() => _isActive = v),
             ),
@@ -343,9 +368,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             // Owner Details
             Text(
               '1. Data Pemilik Villa (Owner)',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -379,9 +404,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             // Butler / Penjaga Details
             Text(
               '2. Data Penjaga / Butler Villa (Di Lokasi)',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
@@ -414,9 +439,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
             // Komisi Marketer
             Text(
               '3. Kesepakatan Komisi Marketer',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             SegmentedButton<String>(
@@ -436,8 +461,9 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
                   labelText: 'Besaran Komisi (%)',
                   suffixText: '%',
                 ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
               )
             else
               TextFormField(
@@ -455,7 +481,8 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
               controller: _privateNotes,
               decoration: const InputDecoration(
                 labelText: 'Catatan Khusus Villa',
-                hintText: 'Misal: Kunci cadangan ada di pos satpam, nego max 10%',
+                hintText:
+                    'Misal: Kunci cadangan ada di pos satpam, nego max 10%',
                 alignLabelWithHint: true,
               ),
               maxLines: 2,
@@ -489,10 +516,7 @@ class _VillaFormScreenState extends ConsumerState<VillaFormScreen> {
   Widget _priceField(TextEditingController c, String label) {
     return TextFormField(
       controller: c,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixText: 'Rp ',
-      ),
+      decoration: InputDecoration(labelText: label, prefixText: 'Rp '),
       keyboardType: TextInputType.number,
       inputFormatters: [CurrencyInputFormatter()],
     );

@@ -9,27 +9,30 @@ class SettingsRepository {
   static const defaultId = 'default';
 
   Future<AppSetting> getSettings() async {
-    final existing = await (_db.select(_db.appSettings)
-          ..where((t) => t.id.equals(defaultId)))
-        .getSingleOrNull();
+    final existing = await (_db.select(
+      _db.appSettings,
+    )..where((t) => t.id.equals(defaultId))).getSingleOrNull();
     if (existing != null) return existing;
 
     // Seed default if not exists
-    await _db.into(_db.appSettings).insert(
+    await _db
+        .into(_db.appSettings)
+        .insert(
           const AppSettingsCompanion(id: Value(defaultId)),
           mode: InsertMode.insertOrIgnore,
         );
-    return (_db.select(_db.appSettings)..where((t) => t.id.equals(defaultId)))
-        .getSingle();
+    return (_db.select(
+      _db.appSettings,
+    )..where((t) => t.id.equals(defaultId))).getSingle();
   }
 
   Stream<AppSetting> watchSettings() {
     return (_db.select(_db.appSettings)..where((t) => t.id.equals(defaultId)))
         .watchSingleOrNull()
         .asyncMap((setting) async {
-      if (setting != null) return setting;
-      return getSettings();
-    });
+          if (setting != null) return setting;
+          return getSettings();
+        });
   }
 
   Future<void> updateSettings({
@@ -44,14 +47,14 @@ class SettingsRepository {
     String? templateDetail,
     String? templateButlerNotification,
   }) async {
-    await _db.into(_db.appSettings).insertOnConflictUpdate(
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
           AppSettingsCompanion(
             id: const Value(defaultId),
             businessName: Value(businessName),
             tagline: Value(tagline),
-            logoPath: logoPath != null
-                ? Value(logoPath)
-                : const Value.absent(),
+            logoPath: logoPath != null ? Value(logoPath) : const Value.absent(),
             adminName: Value(adminName),
             adminContact: Value(adminContact),
             bankAccounts: Value(bankAccounts),

@@ -29,8 +29,17 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   String _status = 'confirmed';
   bool _loaded = false;
   bool _saving = false;
+  Future<Booking?>? _bookingFuture;
 
   bool get _isEdit => widget.bookingId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEdit) {
+      _bookingFuture = ref.read(bookingRepoProvider).getById(widget.bookingId!);
+    }
+  }
 
   @override
   void dispose() {
@@ -44,7 +53,8 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Future<void> _pickDate({required bool isCheckIn}) async {
     final initial = isCheckIn
         ? (_checkIn ?? DateTime.now())
-        : (_checkOut ?? (_checkIn ?? DateTime.now()).add(const Duration(days: 1)));
+        : (_checkOut ??
+              (_checkIn ?? DateTime.now()).add(const Duration(days: 1)));
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -73,7 +83,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
     }
   }
 
-  Future<void> _load(Booking b) async {
+  void _load(Booking b) {
     _villaId = b.villaId;
     _guestName.text = b.guestName;
     _guestContact.text = b.guestContact;
@@ -86,11 +96,12 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (!_formKey.currentState!.validate()) return;
     if (_villaId == null || _checkIn == null || _checkOut == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lengkapi villa & tanggal')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lengkapi villa & tanggal')));
       return;
     }
     if (!_checkOut!.isAfter(_checkIn!)) {
@@ -100,40 +111,47 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
       return;
     }
 
-    final repo = ref.read(bookingRepoProvider);
-    if (_status == 'confirmed') {
-      final overlaps = await repo.findOverlaps(
-        villaId: _villaId!,
-        checkIn: _checkIn!,
-        checkOut: _checkOut!,
-        excludeId: widget.bookingId,
-      );
-      if (overlaps.isNotEmpty && mounted) {
-        final detail = overlaps
-            .map((o) =>
-                '• ${o.guestName}: ${formatDate(o.checkIn)} → ${formatDate(o.checkOut)}')
-            .join('\n');
-        final proceed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Bentrok tanggal'),
-            content: Text('Ada booking lain di villa yang sama:\n\n$detail'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Batal')),
-              FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Tetap Simpan')),
-            ],
-          ),
-        );
-        if (proceed != true) return;
-      }
-    }
-
     setState(() => _saving = true);
     try {
+      final repo = ref.read(bookingRepoProvider);
+      var allowOverlap = false;
+      if (_status == 'confirmed') {
+        final overlaps = await repo.findOverlaps(
+          villaId: _villaId!,
+          checkIn: _checkIn!,
+          checkOut: _checkOut!,
+          excludeId: widget.bookingId,
+        );
+        if (!mounted) return;
+        if (overlaps.isNotEmpty) {
+          final detail = overlaps
+              .map(
+                (o) =>
+                    '- ${o.guestName}: ${formatDate(o.checkIn)} s.d. ${formatDate(o.checkOut)}',
+              )
+              .join('\n');
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Bentrok tanggal'),
+              content: Text('Ada booking lain di villa yang sama:\n\n$detail'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Tetap Simpan'),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) return;
+          allowOverlap = true;
+        }
+      }
+
       await repo.upsert(
         id: widget.bookingId,
         villaId: _villaId!,
@@ -144,8 +162,15 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
         pricePerNightSnapshot: parseCurrency(_price.text),
         status: _status,
         notes: _notes.text.trim(),
+        allowOverlap: allowOverlap,
       );
       if (mounted) context.go('/bookings');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Booking gagal disimpan: $error')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -155,27 +180,36 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
   Widget build(BuildContext context) {
     if (_isEdit && !_loaded) {
       return FutureBuilder(
-        future: ref.read(bookingRepoProvider).getById(widget.bookingId!),
+        future: _bookingFuture,
         builder: (context, snap) {
-          if (!snap.hasData) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-                body: Center(child: CircularProgressIndicator()));
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snap.hasError) {
+            return Scaffold(
+              appBar: AppBar(),
+              body: Center(child: Text('Gagal memuat booking: ${snap.error}')),
+            );
           }
           final b = snap.data;
           if (b == null) {
             return const Scaffold(
-                body: Center(child: Text('Booking tidak ditemukan')));
+              body: Center(child: Text('Booking tidak ditemukan')),
+            );
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!_loaded) setState(() => _load(b));
+            if (mounted && !_loaded) setState(() => _load(b));
           });
           return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+            body: Center(child: CircularProgressIndicator()),
+          );
         },
       );
     }
 
-    final villasAsync = ref.watch(villaListProvider);
+    final villasAsync = ref.watch(allVillasProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -191,19 +225,33 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                     title: const Text('Hapus booking?'),
                     actions: [
                       TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Batal')),
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Batal'),
+                      ),
                       FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Hapus')),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Hapus'),
+                      ),
                     ],
                   ),
                 );
                 if (ok == true && mounted) {
-                  await ref
-                      .read(bookingRepoProvider)
-                      .delete(widget.bookingId!);
-                  if (mounted) context.go('/bookings');
+                  try {
+                    await ref
+                        .read(bookingRepoProvider)
+                        .delete(widget.bookingId!);
+                    if (mounted) context.go('/bookings');
+                  } catch (_) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Booking yang sudah memiliki invoice tidak dapat dihapus.',
+                          ),
+                        ),
+                      );
+                    }
+                  }
                 }
               },
             ),
@@ -222,10 +270,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 value: _villaId,
                 decoration: const InputDecoration(labelText: 'Villa *'),
                 items: villas
-                    .map((v) => DropdownMenuItem(
-                          value: v.id,
-                          child: Text(v.name),
-                        ))
+                    .map(
+                      (v) => DropdownMenuItem(value: v.id, child: Text(v.name)),
+                    )
                     .toList(),
                 onChanged: _onVillaChanged,
                 validator: (v) => v == null ? 'Wajib' : null,
@@ -239,8 +286,9 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
             ),
             TextFormField(
               controller: _guestContact,
-              decoration:
-                  const InputDecoration(labelText: 'Kontak WA (08… / 62…)'),
+              decoration: const InputDecoration(
+                labelText: 'Kontak WA (08… / 62…)',
+              ),
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 8),
@@ -249,18 +297,18 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _pickDate(isCheckIn: true),
-                    child: Text(_checkIn == null
-                        ? 'Check-in'
-                        : formatDate(_checkIn!)),
+                    child: Text(
+                      _checkIn == null ? 'Check-in' : formatDate(_checkIn!),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _pickDate(isCheckIn: false),
-                    child: Text(_checkOut == null
-                        ? 'Check-out'
-                        : formatDate(_checkOut!)),
+                    child: Text(
+                      _checkOut == null ? 'Check-out' : formatDate(_checkOut!),
+                    ),
                   ),
                 ),
               ],
@@ -290,9 +338,13 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: const [
                   DropdownMenuItem(
-                      value: 'confirmed', child: Text('Confirmed')),
+                    value: 'confirmed',
+                    child: Text('Confirmed'),
+                  ),
                   DropdownMenuItem(
-                      value: 'cancelled', child: Text('Cancelled')),
+                    value: 'cancelled',
+                    child: Text('Cancelled'),
+                  ),
                 ],
                 onChanged: (v) => setState(() => _status = v ?? 'confirmed'),
               ),

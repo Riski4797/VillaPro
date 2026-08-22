@@ -2,7 +2,7 @@
 
 Aplikasi manajemen operasional & pemasaran villa offline-first untuk marketer freelance dan property manager.
 
-Dibangun menggunakan **Flutter (Android & Linux Desktop)** dengan arsitektur **Riverpod** dan database lokal **Drift SQLite**.
+Dibangun menggunakan **Flutter untuk Android** dengan Linux sebagai lingkungan pengembangan/testing, arsitektur **Riverpod**, dan database lokal **Drift SQLite**.
 
 ---
 
@@ -40,7 +40,8 @@ Dibangun menggunakan **Flutter (Android & Linux Desktop)** dengan arsitektur **R
 
 - 🔒 **100% Offline-First & Keamanan Data:**
   - Penyimpanan lokal penuh tanpa ketergantungan server cloud eksternal.
-  - Export cadangan data ke file ZIP (`villamanager-backup-YYYYMMDD.zip`).
+  - Backup dan restore lengkap melalui ZIP AES-256 yang dilindungi password.
+  - Android Auto Backup dinonaktifkan untuk data operasional sensitif.
 
 ---
 
@@ -48,11 +49,11 @@ Dibangun menggunakan **Flutter (Android & Linux Desktop)** dengan arsitektur **R
 
 - **Framework:** Flutter 3.47+ (Dart 3.13+)
 - **State Management:** `flutter_riverpod`
-- **Database:** `drift` + `sqlite3_flutter_libs`
+- **Database:** `drift` + `sqlite3` native assets
 - **Routing:** `go_router`
 - **PDF & Printing:** `pdf` + `printing`
-- **Media & Sharing:** `image_picker`, `share_plus`
-- **Typography & Theme:** `google_fonts` (Plus Jakarta Sans) - *Warm Bali Resort & Linen Theme*
+- **Media & Sharing:** `image_picker`, `video_player`, `share_plus`
+- **Typography & Theme:** Plus Jakarta Sans dibundel lokal - *Warm Bali Resort & Linen Theme*
 - **Notifications:** `flutter_local_notifications`
 
 ---
@@ -70,7 +71,8 @@ flutter run -d linux
 ### Build APK Android Release
 ```bash
 cd villa_manager
-flutter build apk --release --split-per-abi
+source ~/.config/villapro/release.env
+flutter build apk --release
 ```
 
 File APK akan tersedia di `build/app/outputs/flutter-apk/`.
@@ -78,4 +80,4 @@ File APK akan tersedia di `build/app/outputs/flutter-apk/`.
 ---
 
 ## 📄 Lisensi
-Private / Proprietary. Dikembangkan untuk efisiensi kerja marketer freelance villa.
+Private / Proprietary. Lihat [`LICENSE`](LICENSE), [`PRIVACY.md`](PRIVACY.md), dan [`SECURITY.md`](SECURITY.md).

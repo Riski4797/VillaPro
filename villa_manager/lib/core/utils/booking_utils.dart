@@ -28,8 +28,12 @@ int nightsBetween(DateTime checkIn, DateTime checkOut) {
 
 enum BookingPhase { upcoming, ongoing, done, cancelled }
 
-BookingPhase bookingPhase(DateTime checkIn, DateTime checkOut, String status,
-    {DateTime? now}) {
+BookingPhase bookingPhase(
+  DateTime checkIn,
+  DateTime checkOut,
+  String status, {
+  DateTime? now,
+}) {
   if (status == 'cancelled') return BookingPhase.cancelled;
   final today = now ?? DateTime.now();
   final t = DateTime(today.year, today.month, today.day);
@@ -41,8 +45,8 @@ BookingPhase bookingPhase(DateTime checkIn, DateTime checkOut, String status,
 }
 
 String bookingPhaseLabel(BookingPhase p) => switch (p) {
-      BookingPhase.upcoming => 'Akan datang',
-      BookingPhase.ongoing => 'Berlangsung',
-      BookingPhase.done => 'Selesai',
-      BookingPhase.cancelled => 'Batal',
-    };
+  BookingPhase.upcoming => 'Akan datang',
+  BookingPhase.ongoing => 'Berlangsung',
+  BookingPhase.done => 'Selesai',
+  BookingPhase.cancelled => 'Batal',
+};

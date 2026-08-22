@@ -4,8 +4,25 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+fun releaseEnv(name: String): String? {
+    val value = System.getenv(name)
+    if (releaseRequested) {
+        require(!value.isNullOrBlank()) { "$name is required for release builds" }
+    }
+    return value
+}
+
+val releaseStorePath = releaseEnv("VILLAPRO_KEYSTORE_PATH")
+val releaseStorePassword = releaseEnv("VILLAPRO_KEYSTORE_PASSWORD")
+val releaseKeyAlias = releaseEnv("VILLAPRO_KEY_ALIAS")
+val releaseKeyPassword = releaseEnv("VILLAPRO_KEY_PASSWORD")
+
 android {
-    namespace = "com.villamanager.villa_manager"
+    namespace = "com.riski.villapro"
     compileSdk = flutter.compileSdkVersion
     // ndkVersion = flutter.ndkVersion
 
@@ -16,8 +33,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.villamanager.villa_manager"
+        applicationId = "com.riski.villapro"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -30,13 +46,21 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        create("release") {
+            if (releaseStorePath != null) storeFile = file(releaseStorePath)
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
 }
 
 kotlin {

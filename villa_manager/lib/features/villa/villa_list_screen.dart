@@ -37,8 +37,9 @@ class VillaListScreen extends ConsumerWidget {
               matcherFilter.isActive
                   ? Icons.filter_alt
                   : Icons.filter_alt_outlined,
-              color:
-                  matcherFilter.isActive ? AppColors.gold : AppColors.primary,
+              color: matcherFilter.isActive
+                  ? AppColors.gold
+                  : AppColors.primary,
             ),
             onPressed: () => _showSmartMatcherDialog(context, ref),
           ),
@@ -49,7 +50,9 @@ class VillaListScreen extends ConsumerWidget {
               final list = villasAsync.valueOrNull ?? [];
               if (list.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Tidak ada villa untuk dicetak')),
+                  const SnackBar(
+                    content: Text('Tidak ada villa untuk dicetak'),
+                  ),
                 );
                 return;
               }
@@ -78,8 +81,11 @@ class VillaListScreen extends ConsumerWidget {
               color: AppColors.goldBg,
               child: Row(
                 children: [
-                  const Icon(Icons.auto_awesome,
-                      size: 18, color: Color(0xFF8D6E63)),
+                  const Icon(
+                    Icons.auto_awesome,
+                    size: 18,
+                    color: Color(0xFF8D6E63),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -97,9 +103,9 @@ class VillaListScreen extends ConsumerWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, size: 16),
-                    onPressed: () => ref
-                        .read(smartMatcherFilterProvider.notifier)
-                        .state = const SmartMatcherFilter(),
+                    onPressed: () =>
+                        ref.read(smartMatcherFilterProvider.notifier).state =
+                            const SmartMatcherFilter(),
                   ),
                 ],
               ),
@@ -143,15 +149,20 @@ class VillaListScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.holiday_village_outlined,
-                            size: 64, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.holiday_village_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           matcherFilter.isActive
                               ? 'Tidak ada villa yang cocok dengan kriteria'
                               : 'Belum ada data villa',
                           style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -159,7 +170,9 @@ class VillaListScreen extends ConsumerWidget {
                               ? 'Coba longgarkan budget atau tanggal booking'
                               : 'Tap tombol di bawah untuk menambah villa pertama',
                           style: const TextStyle(
-                              fontSize: 12, color: Colors.grey),
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                         ),
                       ],
                     ),
@@ -187,7 +200,9 @@ class VillaListScreen extends ConsumerWidget {
   }
 
   Future<void> _showSmartMatcherDialog(
-      BuildContext context, WidgetRef ref) async {
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final current = ref.read(smartMatcherFilterProvider);
     DateTime? checkIn = current.checkIn;
     DateTime? checkOut = current.checkOut;
@@ -196,8 +211,7 @@ class VillaListScreen extends ConsumerWidget {
           ? formatCurrencyInput(current.maxPrice!)
           : '',
     );
-    final locCtrl =
-        TextEditingController(text: current.locationQuery ?? '');
+    final locCtrl = TextEditingController(text: current.locationQuery ?? '');
 
     await showModalBottomSheet(
       context: context,
@@ -243,8 +257,10 @@ class VillaListScreen extends ConsumerWidget {
               const SizedBox(height: 16),
 
               // Date Range Picker
-              const Text('1. Tanggal Menginap Tamu:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                '1. Tanggal Menginap Tamu:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -256,7 +272,8 @@ class VillaListScreen extends ConsumerWidget {
                           context: ctx,
                           firstDate: now,
                           lastDate: now.add(const Duration(days: 365)),
-                          initialDateRange: (checkIn != null && checkOut != null)
+                          initialDateRange:
+                              (checkIn != null && checkOut != null)
                               ? DateTimeRange(start: checkIn!, end: checkOut!)
                               : null,
                         );
@@ -282,8 +299,10 @@ class VillaListScreen extends ConsumerWidget {
               const SizedBox(height: 14),
 
               // Budget Max
-              const Text('2. Budget Maksimal / Malam:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                '2. Budget Maksimal / Malam:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: budgetCtrl,
@@ -299,8 +318,10 @@ class VillaListScreen extends ConsumerWidget {
               const SizedBox(height: 14),
 
               // Location
-              const Text('3. Area / Lokasi:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                '3. Area / Lokasi:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: locCtrl,
@@ -319,9 +340,8 @@ class VillaListScreen extends ConsumerWidget {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () {
-                          ref
-                              .read(smartMatcherFilterProvider.notifier)
-                              .state = const SmartMatcherFilter();
+                          ref.read(smartMatcherFilterProvider.notifier).state =
+                              const SmartMatcherFilter();
                           Navigator.pop(ctx);
                         },
                         child: const Text('Reset Filter'),
@@ -336,8 +356,9 @@ class VillaListScreen extends ConsumerWidget {
                       ),
                       onPressed: () {
                         final maxP = parseCurrency(budgetCtrl.text);
-                        ref.read(smartMatcherFilterProvider.notifier).state =
-                            SmartMatcherFilter(
+                        ref
+                            .read(smartMatcherFilterProvider.notifier)
+                            .state = SmartMatcherFilter(
                           checkIn: checkIn,
                           checkOut: checkOut,
                           maxPrice: maxP > 0 ? maxP : null,
@@ -422,7 +443,9 @@ class _VillaLandscapeCard extends ConsumerWidget {
                   child: !villa.isActive
                       ? Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(20),
@@ -444,13 +467,17 @@ class _VillaLandscapeCard extends ConsumerWidget {
                               final cout = occ.currentBooking!.checkOut;
                               return Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.red.shade700,
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.2),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.2,
+                                      ),
                                       blurRadius: 4,
                                     ),
                                   ],
@@ -481,7 +508,9 @@ class _VillaLandscapeCard extends ConsumerWidget {
                             }
                             return Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.primaryLight,
                                 borderRadius: BorderRadius.circular(20),
@@ -532,8 +561,11 @@ class _VillaLandscapeCard extends ConsumerWidget {
                           showShareToCustomerSheet(context, villa: villa),
                       child: const Padding(
                         padding: EdgeInsets.all(8),
-                        child: Icon(Icons.share,
-                            size: 18, color: AppColors.primary),
+                        child: Icon(
+                          Icons.share,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                   ),
@@ -553,9 +585,7 @@ class _VillaLandscapeCard extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           villa.name,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
+                          style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -566,12 +596,15 @@ class _VillaLandscapeCard extends ConsumerWidget {
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.goldBg,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                              color: AppColors.gold.withValues(alpha: 0.3)),
+                            color: AppColors.gold.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Text(
                           'Komisi: ${commission.label}',
@@ -588,8 +621,11 @@ class _VillaLandscapeCard extends ConsumerWidget {
                   if (villa.location.isNotEmpty)
                     Row(
                       children: [
-                        Icon(Icons.location_on,
-                            size: 14, color: Colors.grey.shade600),
+                        Icon(
+                          Icons.location_on,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -639,8 +675,11 @@ class _VillaLandscapeCard extends ConsumerWidget {
                               color: AppColors.primary,
                             ),
                           ),
-                          Icon(Icons.chevron_right,
-                              size: 16, color: AppColors.primary),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: AppColors.primary,
+                          ),
                         ],
                       ),
                     ],

@@ -32,44 +32,46 @@ String villaShareText(Villa v, ShareTemplate kind, [AppSetting? settings]) {
 
   return switch (kind) {
     ShareTemplate.teaser => () {
-        if (settings != null && settings.templateTeaser.isNotEmpty) {
-          return interpolate(settings.templateTeaser);
-        }
-        final uspLine = usps.take(2).join(', ');
-        return '${v.name} - ${v.location}\n'
-            'Harga mulai $weekday/malam\n'
-            '${uspLine.isEmpty ? '' : '$uspLine\n'}'
-            'Mau info lengkap? Chat aja ya kak 🙏';
-      }(),
+      if (settings != null && settings.templateTeaser.isNotEmpty) {
+        return interpolate(settings.templateTeaser);
+      }
+      final uspLine = usps.take(2).join(', ');
+      return '${v.name} - ${v.location}\n'
+          'Harga mulai $weekday/malam\n'
+          '${uspLine.isEmpty ? '' : '$uspLine\n'}'
+          'Mau info lengkap? Chat aja ya kak 🙏';
+    }(),
     ShareTemplate.detail => () {
-        if (settings != null && settings.templateDetail.isNotEmpty) {
-          return interpolate(settings.templateDetail);
-        }
-        final uspBlock = usps.isEmpty
-            ? ''
-            : '✨ *Keunggulan:*\n${usps.map((e) => '• $e').join('\n')}\n\n';
-        final amBlock = amenities.isEmpty
-            ? ''
-            : '🏠 *Fasilitas:*\n${amenities.map((e) => '• $e').join('\n')}\n\n';
-        final rules =
-            v.houseRules.isEmpty ? '' : '📋 *Aturan Menginap:*\n${v.houseRules}\n\n';
-        return '*${v.name}*\n'
-            '📍 ${v.location}\n\n'
-            '${v.description.isEmpty ? '' : '${v.description}\n\n'}'
-            '$uspBlock'
-            '$amBlock'
-            '💰 *Tarif Sewa:*\n'
-            '- Weekday: $weekday/malam\n'
-            '- Weekend: $weekend/malam\n'
-            '- High season: $highSeason/malam\n\n'
-            '$rules'
-            'Info booking & ketersediaan:\n'
-            'Hubungi $adminName ($adminContact)';
-      }(),
-    ShareTemplate.priceList => '*${v.name}*\n'
-        'Weekday: $weekday | '
-        'Weekend: $weekend | '
-        'High season: $highSeason',
+      if (settings != null && settings.templateDetail.isNotEmpty) {
+        return interpolate(settings.templateDetail);
+      }
+      final uspBlock = usps.isEmpty
+          ? ''
+          : '✨ *Keunggulan:*\n${usps.map((e) => '• $e').join('\n')}\n\n';
+      final amBlock = amenities.isEmpty
+          ? ''
+          : '🏠 *Fasilitas:*\n${amenities.map((e) => '• $e').join('\n')}\n\n';
+      final rules = v.houseRules.isEmpty
+          ? ''
+          : '📋 *Aturan Menginap:*\n${v.houseRules}\n\n';
+      return '*${v.name}*\n'
+          '📍 ${v.location}\n\n'
+          '${v.description.isEmpty ? '' : '${v.description}\n\n'}'
+          '$uspBlock'
+          '$amBlock'
+          '💰 *Tarif Sewa:*\n'
+          '- Weekday: $weekday/malam\n'
+          '- Weekend: $weekend/malam\n'
+          '- High season: $highSeason/malam\n\n'
+          '$rules'
+          'Info booking & ketersediaan:\n'
+          'Hubungi $adminName ($adminContact)';
+    }(),
+    ShareTemplate.priceList =>
+      '*${v.name}*\n'
+          'Weekday: $weekday | '
+          'Weekend: $weekend | '
+          'High season: $highSeason',
   };
 }
 
@@ -79,8 +81,9 @@ String butlerNotificationText({
   AppSetting? settings,
 }) {
   final nights = nightsBetween(booking.checkIn, booking.checkOut);
-  final butlerName =
-      villa.butlerName.isNotEmpty ? villa.butlerName : 'Penjaga Villa';
+  final butlerName = villa.butlerName.isNotEmpty
+      ? villa.butlerName
+      : 'Penjaga Villa';
 
   if (settings != null && settings.templateButlerNotification.isNotEmpty) {
     return settings.templateButlerNotification
@@ -108,19 +111,23 @@ String invoiceShareText(InvoiceDetail detail, [AppSetting? settings]) {
       : 'INVOICE RESERVASI VILLA';
   final bankInfo = (settings?.bankAccounts.isNotEmpty ?? false)
       ? settings!.bankAccounts
-      : '• BCA: 123-456-7890 a.n. Villa Manager\n• Mandiri: 987-654-3210 a.n. Villa Manager';
+      : 'Rekening pembayaran belum dikonfigurasi.';
 
   final buffer = StringBuffer();
   buffer.writeln('📋 *$headerTitle*');
   buffer.writeln('No: *${inv.invoiceNumber}*');
   buffer.writeln('Tamu: ${inv.guestName}');
   buffer.writeln('Villa: ${inv.villaName}');
-  buffer.writeln('Jadwal: ${formatDate(inv.checkIn)} → ${formatDate(inv.checkOut)}');
+  buffer.writeln(
+    'Jadwal: ${formatDate(inv.checkIn)} → ${formatDate(inv.checkOut)}',
+  );
   buffer.writeln('---------------------------');
   buffer.writeln('Total Tagihan: *${formatCurrency(detail.total)}*');
   if (detail.paidAmount > 0) {
     buffer.writeln('Sudah Dibayar (DP): ${formatCurrency(detail.paidAmount)}');
-    buffer.writeln('Sisa Tagihan: *${formatCurrency(detail.remainingBalance)}*');
+    buffer.writeln(
+      'Sisa Tagihan: *${formatCurrency(detail.remainingBalance)}*',
+    );
   }
   buffer.writeln('Status: *[$status]*');
   buffer.writeln('---------------------------');

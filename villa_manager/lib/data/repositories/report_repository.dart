@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../database/app_database.dart';
 
 class VillaReportRow {
@@ -54,116 +56,146 @@ class ReportRepository {
   ReportRepository(this._db);
   final AppDatabase _db;
 
-  Future<int> _invoiceTotal(String invoiceId) async {
-    final items = await (_db.select(_db.invoiceItems)
-          ..where((t) => t.invoiceId.equals(invoiceId)))
-        .get();
-    var s = 0;
-    for (final i in items) {
-      s += i.qty * i.price;
-    }
-    return s;
+  Stream<DashboardSnapshot> watchDashboard() {
+    return _db
+        .customSelect(
+          'SELECT 1',
+          readsFrom: {
+            _db.villas,
+            _db.bookings,
+            _db.invoices,
+            _db.invoiceItems,
+            _db.invoicePayments,
+          },
+        )
+        .watch()
+        .asyncMap((_) => dashboard());
   }
 
   Future<DashboardSnapshot> dashboard() async {
     final today = DateTime.now();
     final t0 = DateTime(today.year, today.month, today.day);
-    final t7 = t0.add(const Duration(days: 7));
+    final endUpcoming = t0.add(const Duration(days: 8));
 
-    final activeVillas = await (_db.select(_db.villas)
-          ..where((t) => t.isActive.equals(true)))
-        .get()
-        .then((l) => l.length);
+    final counts = await _db
+        .customSelect(
+          '''
+      SELECT (SELECT COUNT(*) FROM villas WHERE is_active = 1) AS active_villas,
+             (SELECT COUNT(*) FROM bookings
+              WHERE status = 'confirmed' AND check_out > ?) AS active_bookings
+      ''',
+          variables: [Variable.withDateTime(t0)],
+        )
+        .getSingle();
 
-    final bookings = await (_db.select(_db.bookings)
-          ..where((t) => t.status.equals('confirmed')))
+    final outstanding = await _db.customSelect('''
+      SELECT COUNT(*) AS unpaid_count,
+             COALESCE(SUM(remaining), 0) AS unpaid_total
+      FROM (
+        SELECT COALESCE((
+                 SELECT SUM(qty * price)
+                 FROM invoice_items
+                 WHERE invoice_id = invoices.id
+               ), 0) - COALESCE((
+                 SELECT SUM(amount)
+                 FROM invoice_payments
+                 WHERE invoice_id = invoices.id
+               ), 0) AS remaining
+        FROM invoices
+        WHERE status != 'paid'
+      )
+      WHERE remaining > 0
+    ''').getSingle();
+
+    final upcomingRows = await _db
+        .customSelect(
+          '''
+      SELECT bookings.guest_name, villas.name AS villa_name, bookings.check_in
+      FROM bookings
+      LEFT JOIN villas ON villas.id = bookings.villa_id
+      WHERE bookings.status = 'confirmed'
+        AND bookings.check_in >= ?
+        AND bookings.check_in < ?
+      ORDER BY bookings.check_in
+      ''',
+          variables: [
+            Variable.withDateTime(t0),
+            Variable.withDateTime(endUpcoming),
+          ],
+        )
         .get();
-    final activeBookings = bookings.where((b) {
-      final cout = DateTime(b.checkOut.year, b.checkOut.month, b.checkOut.day);
-      return !cout.isBefore(t0);
-    }).length;
 
-    final unpaid = await (_db.select(_db.invoices)
-          ..where((t) => t.status.equals('unpaid')))
-        .get();
-    var unpaidTotal = 0;
-    for (final inv in unpaid) {
-      unpaidTotal += await _invoiceTotal(inv.id);
-    }
-
-    final upcoming = <UpcomingCheckIn>[];
-    for (final b in bookings) {
-      final cin = DateTime(b.checkIn.year, b.checkIn.month, b.checkIn.day);
-      if (!cin.isBefore(t0) && cin.isBefore(t7.add(const Duration(days: 1)))) {
-        final villa = await (_db.select(_db.villas)
-              ..where((t) => t.id.equals(b.villaId)))
-            .getSingleOrNull();
-        upcoming.add(UpcomingCheckIn(
-          guestName: b.guestName,
-          villaName: villa?.name ?? '—',
-          checkIn: b.checkIn,
-        ));
-      }
-    }
-    upcoming.sort((a, b) => a.checkIn.compareTo(b.checkIn));
+    final upcoming = upcomingRows
+        .map(
+          (row) => UpcomingCheckIn(
+            guestName: row.read<String>('guest_name'),
+            villaName: row.readNullable<String>('villa_name') ?? '-',
+            checkIn: DateTime.fromMillisecondsSinceEpoch(
+              row.read<int>('check_in') * 1000,
+            ),
+          ),
+        )
+        .toList();
 
     return DashboardSnapshot(
-      activeVillas: activeVillas,
-      activeBookings: activeBookings,
-      unpaidCount: unpaid.length,
-      unpaidTotal: unpaidTotal,
+      activeVillas: counts.read<int>('active_villas'),
+      activeBookings: counts.read<int>('active_bookings'),
+      unpaidCount: outstanding.read<int>('unpaid_count'),
+      unpaidTotal: outstanding.read<int>('unpaid_total'),
       upcomingCheckIns: upcoming,
     );
   }
 
-  /// Paid invoices with dateIssued in [from, to] (inclusive dates).
+  /// Paid invoices settled in [from, to] (inclusive dates).
   Future<ReportSummary> summary(DateTime from, DateTime to) async {
     final start = DateTime(from.year, from.month, from.day);
-    final end = DateTime(to.year, to.month, to.day, 23, 59, 59);
+    final endExclusive = DateTime(
+      to.year,
+      to.month,
+      to.day,
+    ).add(const Duration(days: 1));
 
-    final paid = await (_db.select(_db.invoices)
-          ..where((t) => t.status.equals('paid')))
+    final result = await _db
+        .customSelect(
+          '''
+      SELECT villa_name,
+             COUNT(*) AS booking_count,
+             COALESCE(SUM(total), 0) AS omzet,
+             COALESCE(SUM(
+               CASE commission_type_snapshot
+                 WHEN 'fixed' THEN commission_fixed_snapshot
+                 ELSE CAST(ROUND(total * commission_percent_snapshot / 100.0) AS INTEGER)
+               END
+             ), 0) AS komisi
+      FROM invoices
+      LEFT JOIN (
+        SELECT invoice_id, SUM(qty * price) AS total
+        FROM invoice_items
+        GROUP BY invoice_id
+      ) AS totals ON totals.invoice_id = invoices.id
+      WHERE status = 'paid' AND date_paid >= ? AND date_paid < ?
+      GROUP BY villa_name
+      ORDER BY omzet DESC
+      ''',
+          variables: [
+            Variable.withDateTime(start),
+            Variable.withDateTime(endExclusive),
+          ],
+        )
         .get();
 
-    final byVilla = <String, VillaReportRow>{};
-    var omzet = 0;
-    var komisi = 0;
-
-    for (final inv in paid) {
-      final issued = inv.dateIssued;
-      if (issued.isBefore(start) || issued.isAfter(end)) continue;
-
-      final total = await _invoiceTotal(inv.id);
-      omzet += total;
-
-      final booking = await (_db.select(_db.bookings)
-            ..where((t) => t.id.equals(inv.bookingId)))
-          .getSingleOrNull();
-      var k = 0;
-      if (booking != null) {
-        final villa = await (_db.select(_db.villas)
-              ..where((t) => t.id.equals(booking.villaId)))
-            .getSingleOrNull();
-        if (villa != null) {
-          k = villa.commissionType == 'fixed'
-              ? villa.commissionFixed
-              : (total * villa.commissionPercent / 100).round();
-        }
-      }
-      komisi += k;
-
-      final name = inv.villaName;
-      final prev = byVilla[name];
-      byVilla[name] = VillaReportRow(
-        villaName: name,
-        bookingCount: (prev?.bookingCount ?? 0) + 1,
-        omzet: (prev?.omzet ?? 0) + total,
-        komisi: (prev?.komisi ?? 0) + k,
-      );
-    }
-
-    final rows = byVilla.values.toList()
-      ..sort((a, b) => b.omzet.compareTo(a.omzet));
+    final rows = result
+        .map(
+          (row) => VillaReportRow(
+            villaName: row.read<String>('villa_name'),
+            bookingCount: row.read<int>('booking_count'),
+            omzet: row.read<int>('omzet'),
+            komisi: row.read<int>('komisi'),
+          ),
+        )
+        .toList();
+    final omzet = rows.fold<int>(0, (sum, row) => sum + row.omzet);
+    final komisi = rows.fold<int>(0, (sum, row) => sum + row.komisi);
     return ReportSummary(omzet: omzet, komisi: komisi, byVilla: rows);
   }
 }

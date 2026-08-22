@@ -22,6 +22,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   late DateTime _to;
   ReportSummary? _summary;
   bool _loading = false;
+  int _request = 0;
 
   @override
   void initState() {
@@ -37,12 +38,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
   }
 
   Future<void> _load() async {
+    final request = ++_request;
+    final from = _from;
+    final to = _to;
     setState(() => _loading = true);
     try {
-      final s = await ref.read(reportRepoProvider).summary(_from, _to);
-      if (mounted) setState(() => _summary = s);
+      final s = await ref.read(reportRepoProvider).summary(from, to);
+      if (mounted && request == _request) setState(() => _summary = s);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && request == _request) setState(() => _loading = false);
     }
   }
 
@@ -108,7 +112,8 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                 const SizedBox(width: 8),
                 ChoiceChip(
                   label: Text(
-                      _period == _Period.pickMonth ? monthLabel : 'Pilih Bulan'),
+                    _period == _Period.pickMonth ? monthLabel : 'Pilih Bulan',
+                  ),
                   selected: _period == _Period.pickMonth,
                   onSelected: (_) => _pickMonth(),
                 ),
@@ -124,7 +129,10 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
           const SizedBox(height: 8),
           Text(
             'Periode: ${formatDate(_from)} — ${formatDate(_to)}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -187,10 +195,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                       children: [
                         const Text(
                           'Total Komisi Anda',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white70,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.white70),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -214,11 +219,17 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Rincian Per Villa',
-                    style: Theme.of(context).textTheme.titleMedium),
-                Text('${_summary!.byVilla.length} Villa',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary)),
+                Text(
+                  'Rincian Per Villa',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  '${_summary!.byVilla.length} Villa',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -230,10 +241,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(Icons.receipt_long_outlined,
-                            size: 48, color: Colors.grey.shade400),
+                        Icon(
+                          Icons.receipt_long_outlined,
+                          size: 48,
+                          color: Colors.grey.shade400,
+                        ),
                         const SizedBox(height: 8),
-                        const Text('Belum ada transaksi invoice lunas di periode ini'),
+                        const Text(
+                          'Belum ada transaksi invoice lunas di periode ini',
+                        ),
                       ],
                     ),
                   ),
@@ -246,41 +262,66 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     headingRowColor: WidgetStateProperty.all(
-                        AppColors.primary.withValues(alpha: 0.05)),
+                      AppColors.primary.withValues(alpha: 0.05),
+                    ),
                     columns: const [
                       DataColumn(
-                          label: Text('Nama Villa',
-                              style: TextStyle(fontWeight: FontWeight.bold))),
+                        label: Text(
+                          'Nama Villa',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
                       DataColumn(
-                          label: Text('Booking',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          numeric: true),
+                        label: Text(
+                          'Booking',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        numeric: true,
+                      ),
                       DataColumn(
-                          label: Text('Total Omzet',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          numeric: true),
+                        label: Text(
+                          'Total Omzet',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        numeric: true,
+                      ),
                       DataColumn(
-                          label: Text('Komisi Marketer',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary)),
-                          numeric: true),
+                        label: Text(
+                          'Komisi Marketer',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        numeric: true,
+                      ),
                     ],
                     rows: _summary!.byVilla
-                        .map((r) => DataRow(cells: [
-                              DataCell(Text(r.villaName,
+                        .map(
+                          (r) => DataRow(
+                            cells: [
+                              DataCell(
+                                Text(
+                                  r.villaName,
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.w600))),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                               DataCell(Text('${r.bookingCount}x')),
                               DataCell(Text(formatCurrency(r.omzet))),
-                              DataCell(Text(
-                                formatCurrency(r.komisi),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
+                              DataCell(
+                                Text(
+                                  formatCurrency(r.komisi),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
-                              )),
-                            ]))
+                              ),
+                            ],
+                          ),
+                        )
                         .toList(),
                   ),
                 ),

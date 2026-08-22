@@ -61,6 +61,13 @@ jobs:
           VILLAPRO_KEYSTORE_PASSWORD: ${{ secrets.VILLAPRO_KEYSTORE_PASSWORD }}
           VILLAPRO_KEY_ALIAS: ${{ secrets.VILLAPRO_KEY_ALIAS }}
           VILLAPRO_KEY_PASSWORD: ${{ secrets.VILLAPRO_KEY_PASSWORD }}
+      - name: Add Android build tools to PATH
+        working-directory: villa_manager
+        run: |
+          sdk_root="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+          test -x "$build_tools/apksigner"
+          echo "$build_tools" >> "$GITHUB_PATH"
       - name: Verify release metadata
         working-directory: villa_manager
         env:
